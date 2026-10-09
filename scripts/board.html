@@ -95,7 +95,7 @@ window.frame = t => {
   pen = null; labels = [];
   let from = 0, theme = BASE;   // a beat with clear or bg wipes the ink, so start from the latest one already reached
   const bgs = [];
-  S.beats.forEach((b, i) => { if (t < T[i].start) return; if (b.clear || b.bg) from = i; if (b.bg) bgs.push(i); if (b.theme) theme = b.theme; });
+  S.beats.forEach((b, i) => { if (t < T[i].start) return; if (b.clear || b.bg) from = i; if (b.clear) bgs.length = 0; if (b.bg) bgs.push(i); if (b.theme) theme = b.theme; });   // clear takes the screenshot away too
   useTheme(theme);   // a beat's `theme` flips the board from that beat on, and the ink already on it changes with it
   g.setTransform(SCALE, 0, 0, SCALE, 0, 0); g.shadowBlur = 0; g.fillStyle = BG; g.fillRect(0, 0, W, H);
   if (bgs.length) {

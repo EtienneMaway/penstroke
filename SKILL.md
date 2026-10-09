@@ -114,7 +114,7 @@ scene({ eleven: { voice: '<voice id>', model: 'eleven_multilingual_v2', settings
 
 ## Draw-over-UI tutorials
 
-`bg` puts a screenshot on the board from that beat on and wipes earlier ink. Paths are relative to the scene file. Repeat the same `bg` on a later beat to wipe the annotations and mark up that screen again. `dim` darkens screenshots so the chalk reads, and a beat can override it, for example `dim: 0` on a showcase image.
+`bg` puts a screenshot on the board from that beat on and wipes earlier ink. Paths are relative to the scene file. Repeat the same `bg` on a later beat to wipe the annotations and mark up that screen again. `clear: true` takes the screenshot away as well, back to the plain board. `dim` darkens screenshots so the chalk reads, and a beat can override it, for example `dim: 0` on a showcase image.
 
 **Capture.** Pick the path that fits:
 
@@ -196,7 +196,7 @@ For many clips, finish one as the worked example, write the rules above into a b
 | An arrow drawn through a label | Start it from the side of the label that faces the target. |
 | A key word drawn early in a long beat | `p` spans the whole beat. Use `seg` to place the stroke where the word falls, or split the beat. |
 | A mispronounced word or a number | Respell it in `say` only ("one hundred ten"). Keep the written label correct ("$110"). |
-| Old annotations still on screen | Ink carries over until a beat has `bg` or `clear`. Repeat the `bg` to start clean. |
+| Old annotations still on screen | Ink carries over until a beat has `bg` or `clear`. Repeat the `bg` to start clean on the same screenshot; `clear` goes back to the plain board. |
 | Calling your own variable `box`, `line`, `ring` or `check` | It hides the helper of that name inside your scene. Name rectangles after the thing: `searchBox`, `sendBtn`. |
 | Converting screenshot coordinates by hand | Use `view()`. Hand arithmetic is where rings miss buttons. |
 | Skipping the sheet | Coordinates are written blind. The sheet is the only check. |
