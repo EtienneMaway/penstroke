@@ -1,0 +1,120 @@
+<!doctype html>
+<html><body style="margin:0;background:#111"><canvas id="c"></canvas>
+<script>
+// Blackboard runtime. A scene file calls scene({...}); render.js then drives frame(t).
+// Every coordinate is in logical board units (1280x720 by default), rendered at SCALE.
+const SCALE = 1.5, cv = document.getElementById('c'), g = cv.getContext('2d');
+const FONT = '"Bradley Hand","Chalkboard SE","Marker Felt",cursive';
+const C = { yellow: '#ffe066', blue: '#4fc3f7', orange: '#ffb74d', pink: '#f48fb1',
+            green: '#81c784', red: '#ef5350', purple: '#b39ddb', white: '#e8e8e8' };
+// Light mode: marker colours on a white board. The names stay the same, so a scene needs no change.
+const LIGHT = { yellow: '#cf8600', blue: '#1b74d3', orange: '#e6620a', pink: '#d5307a', green: '#1c9a4a', red: '#dc2f2f', purple: '#6d45c6', white: '#1c1c1c' };
+const DARK = { ...C };
+let BASE = 'dark', BG, PEN, GLOW;   // GLOW: the halo that lifts ink off a screenshot, dark behind chalk and white behind marker
+const useTheme = t => { const l = t === 'light'; Object.assign(C, l ? LIGHT : DARK); BG = l ? '#fbfbf8' : '#111'; PEN = l ? '#222' : '#fff'; GLOW = l ? '255,255,255' : '0,0,0'; };
+window.setTheme = t => { BASE = t; };
+const clamp = v => Math.max(0, Math.min(1, v));
+const seg = (p, a, b) => clamp((p - a) / (b - a));   // a slice of a beat's 0..1 progress
+let S = null, T = [], W = 1280, H = 720, pen = null;
+const IMGS = {}, FADE = 0.3;   // screenshot backgrounds, and their cross-fade in seconds
+const warns = new Set();
+let labels = [];   // text boxes drawn this frame, to catch one label landing on another
+
+// ---- shapes: each returns [x, y] points for stroke(). Wobble is sin-based, never
+// Math.random, because every frame has to redraw the identical line.
+function curve(a, b, ctrl, n = 40) {
+  const m = ctrl || [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], pts = [];
+  const amp = Math.min(2, Math.hypot(b[0] - a[0], b[1] - a[1]) / 80);   // short strokes get less wobble
+  for (let i = 0; i <= n; i++) {
+    const u = i / n, v = 1 - u, w = amp * Math.sin(u * 9);
+    pts.push([v * v * a[0] + 2 * v * u * m[0] + u * u * b[0] + w, v * v * a[1] + 2 * v * u * m[1] + u * u * b[1] + w]);
+  }
+  return pts;
+}
+const line = (a, b) => curve(a, b);
+function oval(cx, cy, rx, ry) {
+  const pts = [];
+  for (let i = 0; i <= 80; i++) {
+    const a = -Math.PI / 2 + (i / 80) * Math.PI * 2.08, k = 1 + 0.03 * Math.sin(a * 3 + cx) + 0.025 * (i / 80);
+    pts.push([cx + Math.cos(a) * rx * k, cy + Math.sin(a) * ry * k]);
+  }
+  return pts;
+}
+const ring = (r, pad = 8) => oval(r.x + r.w / 2, r.y + r.h / 2, r.w / 2 + pad, r.h / 2 + pad);   // circle a UI element from its {x, y, w, h}
+const box = (x, y, w, h) => [].concat(curve([x, y], [x + w, y + 2], null, 14), curve([x + w, y + 2], [x + w - 2, y + h], null, 10),
+                                      curve([x + w - 2, y + h], [x + 1, y + h - 2], null, 14), curve([x + 1, y + h - 2], [x - 2, y - 5], null, 10));
+const around = (r, pad = 8) => box(r.x - pad, r.y - pad, r.w + pad * 2, r.h + pad * 2);   // a hand-drawn frame around a UI element
+// view(captureWidth, cropTop) puts CSS-pixel numbers straight from getBoundingClientRect() onto the board,
+// so nobody converts screenshot coordinates by hand. cropTop = CSS px cut off the top of the still.
+const view = (cw, top = 0) => ({ p: (x, y) => [x * W / cw, (y - top) * W / cw],
+                                 r: r => ({ x: r.x * W / cw, y: (r.y - top) * W / cw, w: r.w * W / cw, h: r.h * W / cw }) });
+
+// ---- drawing: (geometry..., p, style). p is 0..1; nothing is drawn at 0.
+function stroke(pts, p = 1, o = {}) {
+  if (p <= 0) return;
+  const n = Math.max(2, Math.ceil(pts.length * p));
+  g.strokeStyle = o.color || C.white; g.lineWidth = o.width || 5; g.lineCap = g.lineJoin = 'round';
+  g.beginPath(); g.moveTo(...pts[0]);
+  for (let i = 1; i < n; i++) g.lineTo(...pts[i]);
+  g.stroke();
+  if (p < 1) pen = pts[n - 1];
+}
+function write(str, x, y, p = 1, o = {}) {
+  if (p <= 0) return;
+  const size = o.size || 36;
+  g.font = `bold ${size}px ${FONT}`; g.fillStyle = o.color || C.white; g.textAlign = 'left';
+  const full = g.measureText(str).width, lx = o.center ? x - full / 2 : x, sub = str.slice(0, Math.ceil(str.length * p));
+  if (lx < 0 || lx + full > W || y - size < 0 || y > H) warns.add(`text runs off the board: "${str}"`);
+  labels.push({ str, x: lx, y: y - size * 0.8, w: full, h: size });
+  g.fillText(sub, lx, y);
+  if (p < 1) pen = [lx + g.measureText(sub).width, y - size * 0.3];
+}
+function arrow(a, b, p = 1, o = {}) {
+  const pts = curve(a, b, o.ctrl);
+  stroke(pts, p, o);
+  if (p < 1) return;
+  const e = pts[40], q = pts[36], ang = Math.atan2(e[1] - q[1], e[0] - q[0]);
+  for (const d of [2.6, -2.6]) stroke([e, [e[0] + Math.cos(ang + d) * 22, e[1] + Math.sin(ang + d) * 22]], 1, o);
+}
+function check(x, y, p = 1, o = {}) {   // glyphs like a tick are missing from the handwriting font, so draw them
+  const s = o.size || 40, mid = [x + s * 0.3, y + s];
+  stroke(curve([x, y + s * 0.55], mid, null, 8).concat(curve(mid, [x + s, y], null, 14)), p, { color: C.green, width: 6, ...o });
+}
+
+// ---- runtime
+window.scene = s => { S = s; if (s.theme) setTheme(s.theme); [W, H] = s.size || [W, H]; cv.width = W * SCALE; cv.height = H * SCALE; };
+window.loadImages = async map => { for (const [k, url] of Object.entries(map)) { const im = new Image(); im.src = url; await im.decode(); IMGS[k] = im; } };
+function paint(name, alpha) {   // fit the screenshot inside the board, letterboxed if the shape differs
+  const im = IMGS[name], k = Math.min(W / im.width, H / im.height);
+  g.globalAlpha = alpha; g.drawImage(im, (W - im.width * k) / 2, (H - im.height * k) / 2, im.width * k, im.height * k); g.globalAlpha = 1;
+}
+window.sceneMeta = () => S && { voice: S.voice || 'Samantha', rate: S.rate || 170, gap: S.gap, audio: S.audio, eleven: S.eleven, size: [W, H], bgs: [...new Set(S.beats.map(b => b.bg).filter(Boolean))], beats: S.beats.map(b => ({ say: b.say || '', dur: b.dur, at: b.at })) };
+window.setTimings = t => { T = t; };
+window.warnings = () => [...warns];
+window.frame = t => {
+  pen = null; labels = [];
+  let from = 0, theme = BASE;   // a beat with clear or bg wipes the ink, so start from the latest one already reached
+  const bgs = [];
+  S.beats.forEach((b, i) => { if (t < T[i].start) return; if (b.clear || b.bg) from = i; if (b.bg) bgs.push(i); if (b.theme) theme = b.theme; });
+  useTheme(theme);   // a beat's `theme` flips the board from that beat on, and the ink already on it changes with it
+  g.setTransform(SCALE, 0, 0, SCALE, 0, 0); g.shadowBlur = 0; g.fillStyle = BG; g.fillRect(0, 0, W, H);
+  if (bgs.length) {
+    const cur = bgs[bgs.length - 1], prev = bgs[bgs.length - 2], a = clamp((t - T[cur].start) / FADE);
+    if (a < 1 && prev !== undefined) paint(S.beats[prev].bg, 1);
+    paint(S.beats[cur].bg, a);
+    g.fillStyle = `rgba(${GLOW},${S.beats[cur].dim ?? S.dim ?? 0.2})`; g.fillRect(0, 0, W, H);
+    g.shadowColor = `rgba(${GLOW},.9)`; g.shadowBlur = 10;   // ink needs an edge to read over a busy screenshot
+  }
+  for (let i = from; i < S.beats.length; i++) {
+    const p = clamp((t - T[i].start) / T[i].dur);
+    if (p > 0 && S.beats[i].draw) S.beats[i].draw(p);
+  }
+  for (let i = 0; i < labels.length; i++) for (let j = i + 1; j < labels.length; j++) {
+    const a = labels[i], b = labels[j]; if (a.str === b.str) continue;
+    const ox = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x), oy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+    if (ox > 0 && oy > 0 && ox * oy > 0.15 * Math.min(a.w * a.h, b.w * b.h)) warns.add(`labels overlap: "${a.str}" and "${b.str}"`);
+  }
+  if (pen) { g.fillStyle = PEN; g.shadowColor = PEN; g.shadowBlur = 12; g.beginPath(); g.arc(pen[0], pen[1], 5, 0, 7); g.fill(); g.shadowBlur = 0; }
+  return cv.toDataURL('image/jpeg', 0.95);
+};
+</script></body></html>
