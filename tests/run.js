@@ -20,5 +20,16 @@ for (const f of scenes) {
   console.log(`${verdict.padEnd(4)} ${name.padEnd(12)} ${(log.match(/^ok .* ([\d.]+s)$/m) || [])[1] || ''}`);
   if (verdict !== 'ok') console.log('     ' + (warns.join('\n     ') || log.trim().split('\n').slice(-8).join('\n     ')));
 }
+// Export presets: a landscape scene must come out at each format's exact size.
+const { execFileSync } = require('child_process');
+for (const [preset, w, h] of [['tiktok', 540, 960], ['square', 540, 540], ['youtube', 960, 540]]) {
+  const f = path.join(out, `preset-${preset}.mp4`);
+  const r = spawnSync('node', [path.join(root, 'scripts/render.js'), path.join(root, 'examples/ai-agents.js'), f, '--preset', preset, '--preview'], { encoding: 'utf8' });
+  let size = '';
+  try { size = execFileSync('ffprobe', ['-v', 'error', '-select_streams', 'v', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', f], { encoding: 'utf8' }).trim().replace(/,+$/, '').replace(',', 'x'); } catch {}
+  const ok = r.status === 0 && size === `${w}x${h}`;
+  if (!ok) bad++;
+  console.log(`${ok ? 'ok  ' : 'FAIL'} preset ${preset.padEnd(8)} ${size || 'no video'}`);
+}
 console.log(bad ? `${bad} failed` : 'all passed');
 process.exit(bad ? 1 : 0);

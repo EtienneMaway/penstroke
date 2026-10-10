@@ -24,7 +24,7 @@ Where penstroke is going. Ordered by how much each item improves the videos peop
 
 ## 4. Reach
 
-- [ ] **Export presets** for YouTube, TikTok, Reels and LinkedIn with the right sizes and lengths.
+- [x] **Export presets** (`--preset tiktok|reels|shorts|square|instagram|linkedin|youtube`).
 - [ ] **Translate a finished video.** Reuse the same drawings with new narration in another language.
 - [ ] **Web or desktop app.** A wrapper so non-developers can use it without a terminal.
 

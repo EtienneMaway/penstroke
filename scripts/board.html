@@ -4,6 +4,7 @@
 // Blackboard runtime. A scene file calls scene({...}); render.js then drives frame(t).
 // Every coordinate is in logical board units (1280x720 by default), rendered at SCALE.
 let SCALE = 1.5;
+let PAD = { l: 0, t: 0, r: 0, b: 0 };   // empty board around the drawing, for export formats that are not the scene's own shape
 const cv = document.getElementById('c'), g = cv.getContext('2d');
 const FONT = '"Bradley Hand","Chalkboard SE","Marker Felt",cursive';
 // Each script in a face that writes it properly: a Mac face first, then a Noto face for other systems. Only scripts
@@ -203,7 +204,8 @@ function icon(name, cx, cy, p = 1, o = {}) {
 }
 
 // ---- runtime
-window.scene = s => { S = s; if (s.theme) setTheme(s.theme); [W, H] = s.size || [W, H]; cv.width = W * SCALE; cv.height = H * SCALE; };
+const resize = () => { cv.width = Math.round((W + PAD.l + PAD.r) * SCALE); cv.height = Math.round((H + PAD.t + PAD.b) * SCALE); };
+window.scene = s => { S = s; if (s.theme) setTheme(s.theme); [W, H] = s.size || [W, H]; resize(); };
 window.loadImages = async map => { for (const [k, url] of Object.entries(map)) { const im = new Image(); im.src = url; await im.decode(); IMGS[k] = im; } };
 function paint(name, alpha) {   // fit the screenshot inside the board, letterboxed if the shape differs
   const im = IMGS[name], k = Math.min(W / im.width, H / im.height);
@@ -211,13 +213,15 @@ function paint(name, alpha) {   // fit the screenshot inside the board, letterbo
 }
 window.sceneMeta = () => S && { voice: S.voice, lang: S.lang, kokoro: S.kokoro, rate: S.rate || 170, gap: S.gap, audio: S.audio, eleven: S.eleven, size: [W, H], bgs: [...new Set(S.beats.map(b => b.bg).filter(Boolean))], beats: S.beats.map(b => ({ say: b.say || '', dur: b.dur, at: b.at })) };
 window.setTimings = t => { T = t; };
-window.setScale = k => { SCALE = k; cv.width = W * k; cv.height = H * k; };   // preview renders at a fraction of the pixels
+window.setScale = k => { SCALE = k; resize(); };   // preview renders at a fraction of the pixels
+window.setPad = p => { PAD = { l: 0, t: 0, r: 0, b: 0, ...p }; resize(); };
 window.warnings = () => [...warns];
 let CAPTIONS = false;
 window.setCaptions = on => { CAPTIONS = !!on; };
 // Burned-in caption: the sentence being spoken, wrapped, on a dark pill at the foot of the board.
 function caption(text) {
-  const sc = SCRIPTS.find(k => k.re.test(text)), size = W < H ? 30 : 28, max = W - (W < H ? 100 : 200), pad = 14, lead = size * 1.3;
+  const below = PAD.b >= 100;   // room under the board: captions go there, large, clear of the drawing
+  const sc = SCRIPTS.find(k => k.re.test(text)), size = below ? 52 : W < H ? 30 : 28, max = below ? W - 120 : W - (W < H ? 100 : 200), pad = 14, lead = size * 1.3;
   g.font = `${sc?.bold ? 'bold ' : '600 '}${size}px ${sc ? sc.face + ',' : ''}system-ui,Arial,sans-serif`;
   g.textAlign = 'center'; g.direction = sc && RTL.test(text) ? 'rtl' : 'ltr';
   const lines = []; let cur = '';
@@ -227,7 +231,7 @@ function caption(text) {
   }
   if (cur.trim()) lines.push(cur.trim());
   const bw = Math.min(max, Math.max(...lines.map(l => g.measureText(l).width))) + pad * 2, bh = lines.length * lead + pad * 2 - 6;
-  const x = (W - bw) / 2, y = H - bh - (W < H ? 90 : 24);
+  const x = (W - bw) / 2, y = below ? H + 40 : H - bh - (W < H ? 90 : 24);
   g.save(); g.shadowBlur = 0; g.fillStyle = 'rgba(0,0,0,.72)';
   g.beginPath(); g.roundRect(x, y, bw, bh, 14); g.fill();
   g.fillStyle = '#fff'; g.textBaseline = 'alphabetic';
@@ -240,7 +244,7 @@ window.frame = t => {
   const bgs = [];
   S.beats.forEach((b, i) => { if (t < T[i].start) return; if (b.clear || b.bg) from = i; if (b.clear) bgs.length = 0; if (b.bg) bgs.push(i); if (b.theme) theme = b.theme; });   // clear takes the screenshot away too
   useTheme(theme);   // a beat's `theme` flips the board from that beat on, and the ink already on it changes with it
-  g.setTransform(SCALE, 0, 0, SCALE, 0, 0); g.shadowBlur = 0; g.fillStyle = BG; g.fillRect(0, 0, W, H);
+  g.setTransform(SCALE, 0, 0, SCALE, PAD.l * SCALE, PAD.t * SCALE); g.shadowBlur = 0; g.fillStyle = BG; g.fillRect(-PAD.l, -PAD.t, W + PAD.l + PAD.r, H + PAD.t + PAD.b);
   if (bgs.length) {
     const cur = bgs[bgs.length - 1], prev = bgs[bgs.length - 2], a = clamp((t - T[cur].start) / FADE);
     if (a < 1 && prev !== undefined) paint(S.beats[prev].bg, 1);

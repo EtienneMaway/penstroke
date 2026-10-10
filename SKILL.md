@@ -107,6 +107,18 @@ See `examples/arabic.js` (an Arabic lesson) and `examples/languages.js` (one wor
 
 `node tests/run.js` renders every example and the same short scene in fifteen languages (`tests/languages/`), and fails on any warning. `node tests/fonts.js` prints which face each script gets on this machine: a Mac face, a Noto face, or none.
 
+## Export presets
+
+`node render.js scene.js out.mp4 --preset tiktok` sets the video size for where it will be posted:
+
+| Preset | Size | Captions |
+|---|---|---|
+| `tiktok`, `reels`, `shorts` | 1080x1920 (9:16) | burned in |
+| `square`, `instagram`, `linkedin` | 1080x1080 (1:1) | burned in |
+| `youtube` | 1920x1080 (16:9) | off (upload the `.srt`) |
+
+The scene keeps its own shape. If it is not the format's shape, it is centred on a taller or wider board of the same colour, never cropped or stretched. In a vertical format the captions sit large on the empty board under the drawing, so they never cover ink. `--no-captions` turns the burned captions off. A scene already in the format's shape (`size: [720, 1280]` for `tiktok`) fills the frame. Real-audio scenes get no burned captions. `--preview` halves the size.
+
 ## Light and dark
 
 The board is a blackboard unless told otherwise. Three ways to change that:

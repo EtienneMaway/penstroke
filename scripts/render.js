@@ -12,7 +12,8 @@ const die = m => { console.error(m); process.exit(1); };
 const argv = process.argv.slice(2), pos = [], opt = {};
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
-  if (a === '--preview' || a === '--sheet') opt[a.slice(2)] = true;
+  if (a === '--preview' || a === '--sheet' || a === '--no-captions') opt[a.slice(2)] = true;
+  else if (a === '--preset') opt.preset = argv[++i];
   else if (a === '--beats' || a === '--beat') opt.beats = argv[++i];
   else if (a.startsWith('--')) die(`unknown flag ${a}`);
   else pos.push(a);
@@ -20,6 +21,13 @@ for (let i = 0; i < argv.length; i++) {
 const [sceneFile, out] = pos;
 if (!sceneFile || (!out && !opt.sheet)) die('usage: node render.js <scene.js> <out.mp4> [--preview] [--beats 3-5]\n       node render.js <scene.js> --sheet');
 const PREVIEW = !!(opt.preview || opt.sheet);
+// Export formats. A scene keeps its own shape; if it is not the preset's shape it is centred on a taller or wider board of
+// the same colour, so nothing is cropped or stretched. Vertical formats put the captions on the empty board under the drawing.
+const SQUARE = { w: 1080, h: 1080, captions: true };
+const PRESETS = { tiktok: { w: 1080, h: 1920, captions: true }, reels: { w: 1080, h: 1920, captions: true }, shorts: { w: 1080, h: 1920, captions: true },
+                  youtube: { w: 1920, h: 1080 }, square: SQUARE, instagram: SQUARE, linkedin: SQUARE };
+const preset = opt.preset ? PRESETS[opt.preset] : null;
+if (opt.preset && !preset) die(`unknown preset '${opt.preset}'. Presets: ${Object.keys(PRESETS).join(', ')}`);
 const FPS = PREVIEW ? 12 : 30, LEAD = 0.3, GAP = 0.15, TAIL = 1.0;   // seconds: before the first word, between beats, hold at the end
 const MAC = process.platform === 'darwin';   // elsewhere espeak-ng stands in for `say`: rougher, but it speaks about a hundred languages
 let chromium;
@@ -147,7 +155,15 @@ function kokoroTakes(meta, dir) {
   const meta = await page.evaluate(() => window.sceneMeta());
   if (errs.length || !meta) die(`scene failed to load: ${errs.join('; ') || 'scene({...}) was never called'}`);
 
-  if (PREVIEW) await page.evaluate(() => window.setScale(0.5));   // a third of the pixels: frames come out much faster
+  let outSize = null;   // the video's pixel size when a preset sets it
+  if (preset) {
+    const [W, H] = meta.size, A = preset.w / preset.h, pad = { l: 0, t: 0, r: 0, b: 0 };
+    if (W / H > A * 1.01) { const extra = W / A - H; pad.t = Math.round(extra * 0.3); pad.b = Math.round(extra) - pad.t; }   // wider than the format: board goes in the upper middle, captions below
+    else if (W / H < A / 1.01) pad.l = pad.r = Math.round((H * A - W) / 2);                                                 // narrower: margins at the sides
+    const k = (PREVIEW ? 0.5 : 1) * preset.w / (W + pad.l + pad.r);
+    outSize = [Math.round(preset.w * (PREVIEW ? 0.5 : 1) / 2) * 2, Math.round(preset.h * (PREVIEW ? 0.5 : 1) / 2) * 2];
+    await page.evaluate(([p, s]) => { window.setPad(p); window.setScale(s); }, [pad, k]);
+  } else if (PREVIEW) await page.evaluate(() => window.setScale(0.5));   // a third of the pixels: frames come out much faster
   if (process.env.KHAN_THEME) await page.evaluate(t => window.setTheme(t), process.env.KHAN_THEME);   // KHAN_THEME=light re-skins any scene
   // Screenshot backgrounds go in as data URLs: a file:// image would taint the canvas and block toDataURL.
   const dir = path.dirname(path.resolve(sceneFile));
@@ -209,9 +225,10 @@ function kokoroTakes(meta, dir) {
       const cut = ranged ? `;[full]atrim=start=${t0.toFixed(3)}:end=${t1.toFixed(3)},asetpts=PTS-STARTPTS[a]` : '';
       args.push('-filter_complex', `${delayed};${mix}${cut}`, '-map', '0:v', '-map', '[a]', '-c:a', 'aac', '-b:a', '160k', '-ac', '2');
     }
+    if (outSize) args.push('-vf', `scale=${outSize[0]}:${outSize[1]}`);
     args.push('-t', span.toFixed(3), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', PREVIEW ? '30' : '18', '-movflags', '+faststart', out);
     const ff = spawn('ffmpeg', args, { stdio: ['pipe', 'inherit', 'inherit'] });
-    const burn = process.env.KHAN_CAPTIONS === 'burn';
+    const burn = (process.env.KHAN_CAPTIONS === 'burn' || (preset?.captions && !meta.audio)) && !opt['no-captions'];
     if (burn) await page.evaluate(() => window.setCaptions(true));
     for (let i = Math.round(t0 * FPS); i < Math.round(t0 * FPS) + Math.ceil(span * FPS); i++) {
       const buf = jpeg(await page.evaluate(t => window.frame(t), i / FPS));
@@ -226,7 +243,8 @@ function kokoroTakes(meta, dir) {
   for (let i = first; i <= last; i++)
     fs.writeFileSync(path.join(tmp, `b${String(i - first).padStart(3, '0')}.jpg`), jpeg(await page.evaluate(t => window.frame(t), timings[i].start + timings[i].dur + 0.01)));   // +0.01: land past the beat's last stroke
   const sheet = path.join(tmp, 'sheet.jpg');
-  const cols = meta.size[0] < meta.size[1] ? 6 : 3;   // a vertical board tiles six across so the sheet stays readable
+  const tall = outSize ? outSize[0] < outSize[1] : meta.size[0] < meta.size[1];
+  const cols = tall ? 6 : 3;   // a vertical board tiles six across so the sheet stays readable
   execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', '1', '-i', path.join(tmp, 'b%03d.jpg'),
     '-vf', `scale=${cols === 3 ? 640 : 300}:-1,tile=${cols}x${Math.ceil((last - first + 1) / cols)}`, '-frames:v', '1', sheet]);
   const warns = await page.evaluate(() => window.warnings());

@@ -82,6 +82,16 @@ node scripts/render.js scene.js out.mp4 --beats 4-6     # only those beats, with
 
 Then render the full video once the sheet is clean.
 
+## Export for where it will be posted
+
+```sh
+node scripts/render.js scene.js out.mp4 --preset tiktok     # 1080x1920, captions burned in
+node scripts/render.js scene.js out.mp4 --preset square     # 1080x1080 (Instagram, LinkedIn)
+node scripts/render.js scene.js out.mp4 --preset youtube    # 1920x1080
+```
+
+`tiktok`, `reels` and `shorts` are the same size. A landscape scene is centred on a taller board with the captions underneath, so nothing is cropped. Add `--no-captions` to leave them off.
+
 ## Check your setup
 
 ```sh
