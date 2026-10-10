@@ -117,7 +117,7 @@ See `examples/arabic.js` (an Arabic lesson) and `examples/languages.js` (one wor
 | `square`, `instagram`, `linkedin` | 1080x1080 (1:1) | burned in |
 | `youtube` | 1920x1080 (16:9) | off (upload the `.srt`) |
 
-The scene keeps its own shape. If it is not the format's shape, it is centred on a taller or wider board of the same colour, never cropped or stretched. In a vertical format the captions sit large on the empty board under the drawing, so they never cover ink. `--no-captions` turns the burned captions off. A scene already in the format's shape (`size: [720, 1280]` for `tiktok`) fills the frame. Real-audio scenes get no burned captions. `--preview` halves the size.
+The scene keeps its own shape. If it is not the format's shape, it is centred on a taller or wider board of the same colour, never cropped or stretched. In a vertical format the captions sit large on the empty board under the drawing, so they never cover ink. `--no-captions` turns the burned captions off. A scene already in the format's shape (`size: [720, 1280]` for `tiktok`) fills the frame, and that is the better way to make a short: see `examples/ai-agents-vertical.js`, the same lesson drawn for a phone with ink inside x 50..670 and y 150..1010. Use the letterboxed route only for a scene that already exists. Real-audio scenes get no burned captions. `--preview` halves the size.
 
 ## Light and dark
 

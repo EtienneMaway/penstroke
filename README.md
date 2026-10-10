@@ -63,6 +63,7 @@ node scripts/render.js examples/ui-tutorial.js tutorial.mp4                # dra
 node scripts/render.js examples/arabic.js arabic.mp4                      # right-to-left writing
 node scripts/render.js examples/languages.js languages.mp4                # one word in eight languages
 node scripts/render.js examples/icons.js icons.mp4                        # every built-in icon
+node scripts/render.js examples/ai-agents-vertical.js short.mp4 --preset tiktok   # drawn for a phone
 node scripts/render.js examples/io-devices.js io.mp4                      # a lesson that uses them
 ```
 
@@ -90,7 +91,7 @@ node scripts/render.js scene.js out.mp4 --preset square     # 1080x1080 (Instagr
 node scripts/render.js scene.js out.mp4 --preset youtube    # 1920x1080
 ```
 
-`tiktok`, `reels` and `shorts` are the same size. A landscape scene is centred on a taller board with the captions underneath, so nothing is cropped. Add `--no-captions` to leave them off.
+`tiktok`, `reels` and `shorts` are the same size. A landscape scene is centred on a taller board with the captions underneath, so nothing is cropped. For a short that fills the frame, draw it vertically (`size: [720, 1280]`): see `examples/ai-agents-vertical.js`. Add `--no-captions` to leave them off.
 
 ## Check your setup
 
