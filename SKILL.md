@@ -24,6 +24,7 @@ Based on khan-explainer by Haider Farooq ([github.com/haiderfarooq3/khan-explain
 2. **Plan the picture.** Lesson: lay out the whole board. Tutorial: capture the stills and their rectangles. Each has a section below.
 3. **Write `scene.js`** in a scratch folder. Copy `examples/ai-agents.js` for a lesson or `examples/ui-tutorial.js` for a tutorial.
 4. **Render:** `node ~/.claude/skills/penstroke/scripts/render.js scene.js out.mp4`
+4b. **While laying out, use the fast modes** instead of full renders: `node render.js scene.js --sheet` writes only the contact sheet and warnings (about a second, no video). `--preview` renders a small 12 fps video, using the built-in voice if the Kokoro takes are not cached yet. `--beats 4-6` renders just those beats with their audio. Render the full video once the sheet is clean.
 5. **Read the `sheet` image it prints.** It shows the board at the end of every beat. The same folder holds every beat full-size as `b000.jpg`, `b001.jpg` and so on. Open those to check that a ring really sits on a small button. Fix every `WARN` (text off the board, or one label on another), overlap and spill, then re-render. A render takes seconds, so iterate.
 6. Deliver the MP4 and say which voice it used.
 

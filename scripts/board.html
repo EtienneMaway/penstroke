@@ -3,7 +3,8 @@
 <script>
 // Blackboard runtime. A scene file calls scene({...}); render.js then drives frame(t).
 // Every coordinate is in logical board units (1280x720 by default), rendered at SCALE.
-const SCALE = 1.5, cv = document.getElementById('c'), g = cv.getContext('2d');
+let SCALE = 1.5;
+const cv = document.getElementById('c'), g = cv.getContext('2d');
 const FONT = '"Bradley Hand","Chalkboard SE","Marker Felt",cursive';
 // Each script in a face that writes it properly: a Mac face first, then a Noto face for other systems. Only scripts
 // made of plain strokes are set bold; a faked bold smears vowel marks and stacked consonants. Latin text has no entry.
@@ -210,6 +211,7 @@ function paint(name, alpha) {   // fit the screenshot inside the board, letterbo
 }
 window.sceneMeta = () => S && { voice: S.voice, lang: S.lang, kokoro: S.kokoro, rate: S.rate || 170, gap: S.gap, audio: S.audio, eleven: S.eleven, size: [W, H], bgs: [...new Set(S.beats.map(b => b.bg).filter(Boolean))], beats: S.beats.map(b => ({ say: b.say || '', dur: b.dur, at: b.at })) };
 window.setTimings = t => { T = t; };
+window.setScale = k => { SCALE = k; cv.width = W * k; cv.height = H * k; };   // preview renders at a fraction of the pixels
 window.warnings = () => [...warns];
 let CAPTIONS = false;
 window.setCaptions = on => { CAPTIONS = !!on; };

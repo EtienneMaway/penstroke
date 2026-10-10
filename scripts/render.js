@@ -6,10 +6,21 @@ const { execFileSync, spawn, spawnSync } = require('child_process');
 const { once } = require('events');
 const fs = require('fs'), os = require('os'), path = require('path'), crypto = require('crypto');
 
-const FPS = 30, LEAD = 0.3, GAP = 0.15, TAIL = 1.0;   // seconds: before the first word, between beats, hold at the end
-const [sceneFile, out] = process.argv.slice(2);
 const die = m => { console.error(m); process.exit(1); };
-if (!sceneFile || !out) die('usage: node render.js <scene.js> <out.mp4>');
+// Flags: --preview (small, 12 fps, built-in voice unless the real takes are cached), --beats 3 or 3-5 (only those beats,
+// with their audio), --sheet (no video at all: just the layout contact sheet, in seconds).
+const argv = process.argv.slice(2), pos = [], opt = {};
+for (let i = 0; i < argv.length; i++) {
+  const a = argv[i];
+  if (a === '--preview' || a === '--sheet') opt[a.slice(2)] = true;
+  else if (a === '--beats' || a === '--beat') opt.beats = argv[++i];
+  else if (a.startsWith('--')) die(`unknown flag ${a}`);
+  else pos.push(a);
+}
+const [sceneFile, out] = pos;
+if (!sceneFile || (!out && !opt.sheet)) die('usage: node render.js <scene.js> <out.mp4> [--preview] [--beats 3-5]\n       node render.js <scene.js> --sheet');
+const PREVIEW = !!(opt.preview || opt.sheet);
+const FPS = PREVIEW ? 12 : 30, LEAD = 0.3, GAP = 0.15, TAIL = 1.0;   // seconds: before the first word, between beats, hold at the end
 const MAC = process.platform === 'darwin';   // elsewhere espeak-ng stands in for `say`: rougher, but it speaks about a hundred languages
 let chromium;
 try { ({ chromium } = require('playwright')); }
@@ -113,6 +124,7 @@ function kokoroTakes(meta, dir) {
   const cache = path.join(dir, '.voice', 'kokoro');
   const lines = said.map(b => ({ i: b.i, text: b.text, out: path.join(cache, crypto.createHash('sha1').update(`${voice} ${speed} ${b.text}`).digest('hex').slice(0, 12) + '.wav') }));
   const todo = lines.filter(l => !fs.existsSync(l.out));
+  if (PREVIEW && todo.length && !process.env.KHAN_TTS) { console.log('preview: Kokoro takes are not cached yet, using the built-in voice (timings will differ from the final render)'); return null; }
   if (todo.length) {
     fs.mkdirSync(cache, { recursive: true });
     const r = spawnSync(PYTHON, [path.join(__dirname, 'kokoro_tts.py')], { input: JSON.stringify({ voice, speed, lines: todo }), stdio: ['pipe', 'inherit', 'inherit'] });
@@ -135,6 +147,7 @@ function kokoroTakes(meta, dir) {
   const meta = await page.evaluate(() => window.sceneMeta());
   if (errs.length || !meta) die(`scene failed to load: ${errs.join('; ') || 'scene({...}) was never called'}`);
 
+  if (PREVIEW) await page.evaluate(() => window.setScale(0.5));   // a third of the pixels: frames come out much faster
   if (process.env.KHAN_THEME) await page.evaluate(t => window.setTheme(t), process.env.KHAN_THEME);   // KHAN_THEME=light re-skins any scene
   // Screenshot backgrounds go in as data URLs: a file:// image would taint the canvas and block toDataURL.
   const dir = path.dirname(path.resolve(sceneFile));
@@ -174,32 +187,48 @@ function kokoroTakes(meta, dir) {
   await page.evaluate(t => window.setTimings(t), timings);
   await page.evaluate(() => document.fonts.ready);
 
-  const args = ['-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'mjpeg', '-i', '-'];
-  clips.forEach(c => args.push('-i', c.f));
-  if (clips.length) {
-    const delayed = clips.map((c, i) => `[${i + 1}:a]aresample=48000,adelay=${Math.round(c.at * 1000)}:all=1[a${i}]`).join(';');
-    const mix = clips.map((_, i) => `[a${i}]`).join('') + `amix=inputs=${clips.length}:normalize=0,apad[a]`;
-    args.push('-filter_complex', `${delayed};${mix}`, '-map', '0:v', '-map', '[a]', '-c:a', 'aac', '-b:a', '160k', '-ac', '2');
+  // --beats 3 or 3-5: render only that stretch of the timeline, with a beat of lead-in and tail.
+  let first = 0, last = timings.length - 1;
+  if (opt.beats) {
+    const m = /^(\d+)(?:-(\d+))?$/.exec(opt.beats);
+    if (!m) die('--beats takes a beat number or a range: --beats 3 or --beats 3-5');
+    first = +m[1] - 1; last = +(m[2] || m[1]) - 1;
+    if (first < 0 || last >= timings.length || first > last) die(`--beats ${opt.beats}: this scene has beats 1 to ${timings.length}`);
   }
-  args.push('-t', total.toFixed(3), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '18', '-movflags', '+faststart', out);
-  const ff = spawn('ffmpeg', args, { stdio: ['pipe', 'inherit', 'inherit'] });
-  const burn = process.env.KHAN_CAPTIONS === 'burn';
-  if (burn) await page.evaluate(() => window.setCaptions(true));
-  for (let i = 0; i < Math.ceil(total * FPS); i++) {
-    const buf = jpeg(await page.evaluate(t => window.frame(t), i / FPS));
-    if (!ff.stdin.write(buf)) await once(ff.stdin, 'drain');
+  const ranged = first > 0 || last < timings.length - 1;
+  const t0 = ranged ? Math.floor(Math.max(0, timings[first].start - 0.25) * FPS) / FPS : 0;
+  const t1 = ranged ? Math.min(total, timings[last].start + timings[last].dur + 0.5) : total;
+  const span = t1 - t0;
+
+  if (!opt.sheet) {
+    const args = ['-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'mjpeg', '-i', '-'];
+    clips.forEach(c => args.push('-i', c.f));
+    if (clips.length) {
+      const delayed = clips.map((c, i) => `[${i + 1}:a]aresample=48000,adelay=${Math.round(c.at * 1000)}:all=1[a${i}]`).join(';');
+      const mix = clips.map((_, i) => `[a${i}]`).join('') + `amix=inputs=${clips.length}:normalize=0,apad[${ranged ? 'full' : 'a'}]`;
+      const cut = ranged ? `;[full]atrim=start=${t0.toFixed(3)}:end=${t1.toFixed(3)},asetpts=PTS-STARTPTS[a]` : '';
+      args.push('-filter_complex', `${delayed};${mix}${cut}`, '-map', '0:v', '-map', '[a]', '-c:a', 'aac', '-b:a', '160k', '-ac', '2');
+    }
+    args.push('-t', span.toFixed(3), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', PREVIEW ? '30' : '18', '-movflags', '+faststart', out);
+    const ff = spawn('ffmpeg', args, { stdio: ['pipe', 'inherit', 'inherit'] });
+    const burn = process.env.KHAN_CAPTIONS === 'burn';
+    if (burn) await page.evaluate(() => window.setCaptions(true));
+    for (let i = Math.round(t0 * FPS); i < Math.round(t0 * FPS) + Math.ceil(span * FPS); i++) {
+      const buf = jpeg(await page.evaluate(t => window.frame(t), i / FPS));
+      if (!ff.stdin.write(buf)) await once(ff.stdin, 'drain');
+    }
+    ff.stdin.end();
+    await once(ff, 'close');
+    if (burn) await page.evaluate(() => window.setCaptions(false));   // the QA sheet shows the bare board
   }
-  ff.stdin.end();
-  await once(ff, 'close');
-  if (burn) await page.evaluate(() => window.setCaptions(false));   // the QA sheet shows the bare board
 
   // QA sheet: the board as it stands at the end of every beat, tiled into one image.
-  for (let i = 0; i < timings.length; i++)
-    fs.writeFileSync(path.join(tmp, `b${String(i).padStart(3, '0')}.jpg`), jpeg(await page.evaluate(t => window.frame(t), timings[i].start + timings[i].dur + 0.01)));   // +0.01: land past the beat's last stroke
+  for (let i = first; i <= last; i++)
+    fs.writeFileSync(path.join(tmp, `b${String(i - first).padStart(3, '0')}.jpg`), jpeg(await page.evaluate(t => window.frame(t), timings[i].start + timings[i].dur + 0.01)));   // +0.01: land past the beat's last stroke
   const sheet = path.join(tmp, 'sheet.jpg');
   const cols = meta.size[0] < meta.size[1] ? 6 : 3;   // a vertical board tiles six across so the sheet stays readable
   execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', '1', '-i', path.join(tmp, 'b%03d.jpg'),
-    '-vf', `scale=${cols === 3 ? 640 : 300}:-1,tile=${cols}x${Math.ceil(timings.length / cols)}`, '-frames:v', '1', sheet]);
+    '-vf', `scale=${cols === 3 ? 640 : 300}:-1,tile=${cols}x${Math.ceil((last - first + 1) / cols)}`, '-frames:v', '1', sheet]);
   const warns = await page.evaluate(() => window.warnings());
   await browser.close();
 
@@ -208,7 +237,7 @@ function kokoroTakes(meta, dir) {
   console.log('sheet ' + sheet);
   // Captions: one cue per spoken beat, written beside the video as .srt. KHAN_CAPTIONS=burn also draws them into the picture itself.
   // A real-audio scene's `say` is only a note of what the speaker says, so it gets no captions.
-  if (!meta.audio) {
+  if (!meta.audio && out && !opt.sheet && !ranged && !PREVIEW) {
     const stamp = t => { const ms = Math.round(t * 1000), z = (n, w = 2) => String(n).padStart(w, '0');
       return `${z(Math.floor(ms / 3600000))}:${z(Math.floor(ms / 60000) % 60)}:${z(Math.floor(ms / 1000) % 60)},${z(ms % 1000, 3)}`; };
     const cues = timings.map((t, i) => ({ t, text: meta.beats[i].say })).filter(c => c.text);
@@ -216,7 +245,8 @@ function kokoroTakes(meta, dir) {
     fs.writeFileSync(srt, cues.map((c, i) => `${i + 1}\n${stamp(c.t.start)} --> ${stamp(c.t.start + c.t.dur)}\n${c.text}\n`).join('\n'));
     console.log('captions ' + srt);
   }
+  if (opt.sheet) return console.log('ok layout only: no video written');
   const got = probe(out);
-  if (Math.abs(got - total) > 0.1) die(`FAIL ${out} is ${got}s, expected ${total.toFixed(2)}s`);
-  console.log(`ok ${out} ${got.toFixed(2)}s`);
+  if (Math.abs(got - span) > 0.15) die(`FAIL ${out} is ${got}s, expected ${span.toFixed(2)}s`);
+  console.log(`ok ${out} ${got.toFixed(2)}s${ranged ? ` (beats ${first + 1}-${last + 1})` : ''}${PREVIEW ? ' preview' : ''}`);
 })().catch(e => die(e.stack || String(e)));

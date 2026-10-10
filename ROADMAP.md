@@ -17,8 +17,8 @@ Where penstroke is going. Ordered by how much each item improves the videos peop
 
 ## 3. Easier to use
 
-- [ ] **Fast preview.** A live browser preview or low-quality render, so mistakes show up before a full MP4.
-- [ ] **Re-render one beat.** Change a single beat without rendering the whole video again.
+- [x] **Fast preview** (`--sheet` about 1s, `--preview` small and 12 fps).
+- [x] **Re-render some beats** (`--beats 4-6`).
 - [x] **Captions** (`.srt` every render, `KHAN_CAPTIONS=burn` to draw them in). Burned-in captions and exported `.srt` files for sound-off viewing.
 - [ ] **Music and sound effects.** Soft background music and a pen or chalk sound while drawing.
 

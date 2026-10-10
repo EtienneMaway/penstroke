@@ -70,6 +70,18 @@ Each render also prints the path of a contact sheet: the board at the end of eve
 
 [SKILL.md](SKILL.md) is the full reference: the scene API, layout rules, the capture recipe for tutorials and the clip pipeline.
 
+## Fast iteration
+
+A full render is the slow part. While you are still laying a scene out:
+
+```sh
+node scripts/render.js scene.js --sheet                 # layout and warnings only, about a second
+node scripts/render.js scene.js out.mp4 --preview       # small and 12 fps, a few seconds
+node scripts/render.js scene.js out.mp4 --beats 4-6     # only those beats, with their audio
+```
+
+Then render the full video once the sheet is clean.
+
 ## Check your setup
 
 ```sh
