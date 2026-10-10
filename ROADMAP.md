@@ -5,7 +5,7 @@ Where penstroke is going. Ordered by how much each item improves the videos peop
 ## 1. Voice and platform
 
 - [x] **Kokoro as the default free voice** (used automatically once installed; built-in voice is the fallback). The built-in `say` voice is robotic and resets its intonation at every beat. A local human-sounding voice improves every video.
-- [ ] **Windows and Linux as first-class.** Tested espeak-ng or Kokoro path, and clear install errors instead of macOS-only assumptions.
+- [ ] **Windows and Linux as first-class.** A Windows CI job and a `file://` path fix are in; the job is allowed to fail until its first green run, then it becomes a gate. Linux is already a gate.
 - [x] **`doctor` command** (`node scripts/doctor.js`). Check Node, ffmpeg, Playwright and the voice, and say exactly what is missing.
 
 ## 2. Better drawing

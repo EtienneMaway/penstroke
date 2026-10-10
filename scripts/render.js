@@ -149,7 +149,7 @@ function kokoroTakes(meta, dir) {
   const browser = await chromium.launch(), page = await browser.newPage();
   const errs = [];
   page.on('pageerror', e => errs.push(e.message));
-  await page.goto('file://' + path.join(__dirname, 'board.html'));
+  await page.goto(require('url').pathToFileURL(path.join(__dirname, 'board.html')).href);   // a plain 'file://' + path is invalid for C:\ paths
   // The scene gets its own scope: a scene variable named like a helper (box, line, ring) must not be a redeclaration error.
   await page.addScriptTag({ content: `(() => {\n${fs.readFileSync(path.resolve(sceneFile), 'utf8')}\n})();` });
   const meta = await page.evaluate(() => window.sceneMeta());

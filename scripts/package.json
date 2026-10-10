@@ -1,6 +1,6 @@
 {
   "name": "penstroke",
   "private": true,
-  "description": "Blackboard explainer renderer: canvas + Playwright + macOS say + ffmpeg",
+  "description": "Blackboard explainer renderer: canvas + Playwright + ffmpeg + Kokoro, macOS say or espeak-ng",
   "dependencies": { "playwright": "1.62.1" }
 }

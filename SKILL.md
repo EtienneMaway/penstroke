@@ -251,4 +251,4 @@ For many clips, finish one as the worked example, write the rules above into a b
 
 ## Limits
 
-Built for macOS. On Linux the free voice falls back to espeak-ng (`apt install espeak-ng`), which speaks about a hundred languages but sounds rougher still; install the Noto fonts for the scripts you write. The free voice is robotic: use `eleven` or real audio when the voice matters. `tts()` in `scripts/render.js` is the one place to swap in another engine.
+Built for macOS. Windows is experimental (a CI job tries it; run `node scripts/doctor.js`). On Linux the free voice falls back to espeak-ng (`apt install espeak-ng`), which speaks about a hundred languages but sounds rougher still; install the Noto fonts for the scripts you write. The free voice is robotic: use `eleven` or real audio when the voice matters. `tts()` in `scripts/render.js` is the one place to swap in another engine.

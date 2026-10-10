@@ -54,7 +54,7 @@ scene({
 
 ## Install
 
-You need macOS, Node 20 or newer, and ffmpeg (`brew install ffmpeg`).
+You need Node 20 or newer and ffmpeg. macOS is the tested platform (`brew install ffmpeg`); Linux works with espeak-ng as the free voice; **Windows is experimental**: it should work with ffmpeg and espeak-ng installed (or Kokoro, below), and a CI job now tries it on every push. `node scripts/doctor.js` tells you what is missing on your machine.
 
 ```sh
 git clone <your-repo-url> ~/.claude/skills/penstroke

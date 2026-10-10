@@ -28,6 +28,8 @@ jobs:
       - name: Playwright
         working-directory: scripts
         run: npm ci && npx playwright install --with-deps chromium
+      - name: Doctor
+        run: node scripts/doctor.js || true
       - name: Faces each script gets
         run: node tests/fonts.js
       - name: Render examples and languages
@@ -36,6 +38,45 @@ jobs:
         if: always()
         with:
           name: render-${{ matrix.os }}
+          path: out/
+
+  # Windows is new: the render has never run there. Allowed to fail for now, so the macOS and Linux jobs stay the
+  # gate. Read its log, fix what it finds, then delete `continue-on-error` to make it a gate too.
+  windows:
+    runs-on: windows-latest
+    continue-on-error: true
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: FedericoCarboni/setup-ffmpeg@v3
+      - name: espeak-ng
+        run: |
+          choco install espeak-ng -y --no-progress
+          for d in "/c/Program Files/eSpeak NG" "/c/Program Files (x86)/eSpeak NG"; do
+            [ -d "$d" ] && echo "$(cygpath -w "$d")" >> "$GITHUB_PATH"
+          done
+      - name: Playwright
+        working-directory: scripts
+        run: npm ci && npx playwright install chromium
+      - name: Doctor
+        run: node scripts/doctor.js
+      - name: Smoke render (lesson, icons, vertical preset)
+        run: |
+          mkdir -p out
+          node scripts/render.js examples/ai-agents.js out/agents.mp4
+          node scripts/render.js examples/icons.js out/icons.mp4
+          node scripts/render.js examples/ai-agents-vertical.js out/vertical.mp4 --preset tiktok --preview
+      - name: Render examples and languages
+        run: node tests/run.js out
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: render-windows
           path: out/
 
   kokoro:
