@@ -61,6 +61,7 @@ node scripts/render.js examples/ai-agents.js agents.mp4                    # bla
 KHAN_THEME=light node scripts/render.js examples/ai-agents.js light.mp4    # whiteboard
 node scripts/render.js examples/ui-tutorial.js tutorial.mp4                # drawn over screenshots
 node scripts/render.js examples/arabic.js arabic.mp4                      # right-to-left writing
+node scripts/render.js examples/languages.js languages.mp4                # one word in eight languages
 ```
 
 Each render also prints the path of a contact sheet: the board at the end of every beat, in one image. That sheet is how Claude checks its own layout before it shows you anything.
@@ -70,6 +71,8 @@ Each render also prints the path of a contact sheet: the board at the end of eve
 ## Optional extras
 
 - **A human voice.** Export `ELEVENLABS_API_KEY` and add `eleven: '<voice id>'` to a scene. The script is read in one take and cut back into beats, and takes are cached, so re-rendering the same words is free.
+- **Kokoro, a free local human voice.** `pip install kokoro soundfile`, then `kokoro: true` on a scene or `KHAN_TTS=kokoro` for any scene. English, Spanish, French, Hindi, Italian, Japanese, Portuguese and Chinese.
+- **Any language on the board.** Arabic, Urdu and Hebrew are written right to left, Hindi, Thai, Chinese, Japanese, Korean, Russian and more left to right, each in a face that writes it properly. `lang: 'ar'` on a scene picks the matching voice. `node tests/run.js` renders them all.
 - **Real-audio clips** need [uv](https://docs.astral.sh/uv/). `scripts/clip_audio.py` transcribes locally with faster-whisper.
 - **The talking-head cutout** uses macOS Vision. It builds itself with `swiftc` the first time, which needs the Xcode command line tools.
 
