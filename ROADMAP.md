@@ -31,7 +31,7 @@ Where penstroke is going. Ordered by how much each item improves the videos peop
 ## 5. Trust
 
 - [ ] **Output checks in tests.** Verify nothing overlaps or runs off the board, not just that renders finish.
-- [ ] **Example gallery in the README.** Visible sample videos so people can judge it in seconds.
+- [x] **Example gallery in the README** (`docs/gallery/`, made with `scripts/gif.js`).
 - [ ] **Speed and caching** for long videos.
 
 ## Suggested first four

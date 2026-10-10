@@ -16,6 +16,22 @@ It runs on your Mac with an HTML canvas, Playwright, ffmpeg and the built-in `sa
 
 Every mode renders as chalk on a blackboard or marker on a whiteboard, landscape or vertical. One flag switches between them, and a single beat can flip the board mid-video.
 
+## See it
+
+Each one is a scene file of about twenty lines. (GIFs have no sound: the real videos have the voice.)
+
+| Blackboard | Whiteboard |
+|---|---|
+| ![The agent loop on the blackboard](docs/gallery/ai-agents.gif) | ![The same scene on the whiteboard](docs/gallery/ai-agents-light.gif) |
+| `examples/ai-agents.js` | the same file, `KHAN_THEME=light` |
+
+| A longer lesson, with icons | Every built-in icon | Drawn for a phone |
+|---|---|---|
+| ![I/O devices and I/O systems](docs/gallery/io-devices.gif) | ![The icon library](docs/gallery/icons.gif) | ![A vertical short](docs/gallery/ai-agents-vertical.gif) |
+| `examples/io-devices.js` | `examples/icons.js` | `examples/ai-agents-vertical.js` |
+
+To make a GIF of your own render for a README: `node scripts/gif.js out.mp4 demo.gif 720 12`.
+
 ## Why the pen stays in sync
 
 The voice drives the clock. A scene is a list of beats, and a beat is one spoken clause plus the drawing that happens while it is said. The renderer speaks each beat first, measures it, and fits that beat's drawing to its length. Nobody types a timestamp, so the pen cannot run ahead of the words.
