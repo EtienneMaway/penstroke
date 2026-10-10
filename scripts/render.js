@@ -13,7 +13,7 @@ if (!sceneFile || !out) die('usage: node render.js <scene.js> <out.mp4>');
 const MAC = process.platform === 'darwin';   // elsewhere espeak-ng stands in for `say`: rougher, but it speaks about a hundred languages
 let chromium;
 try { ({ chromium } = require('playwright')); }
-catch { die(`playwright missing. Run: cd ${__dirname} && npm install && npx playwright install chromium`); }
+catch { die(`playwright missing. Run: node ${__dirname}/doctor.js`); }
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'khan-'));
 const probe = f => parseFloat(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', f]));
@@ -84,16 +84,30 @@ async function elevenTakes(beats, opt, dir) {
   }));
 }
 
-// Optional local human voice: `kokoro: true` (or a voice name, or { voice, speed }) on the scene, or
-// KHAN_TTS=kokoro to try it on any scene. Free and offline after the first model download; it speaks
+// Local human voice, on by default once installed. `kokoro: 'am_michael'` or { voice, speed } picks a voice,
+// `kokoro: false` or KHAN_TTS=say turns it off. Free and offline after the first model download; it speaks
 // English, Spanish, French, Hindi, Italian, Japanese, Portuguese and Chinese. Takes are cached beside the scene.
 const KOKORO = { en: 'af_heart', 'en-gb': 'bf_emma', es: 'ef_dora', fr: 'ff_siwis', hi: 'hf_alpha', it: 'if_sara', ja: 'jf_alpha', pt: 'pf_dora', zh: 'zf_xiaobei' };
+// Which Python runs Kokoro: KHAN_PYTHON, else the project's own .venv, else python3.
+const venvPy = path.join(__dirname, '..', '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
+const PYTHON = process.env.KHAN_PYTHON || (fs.existsSync(venvPy) ? venvPy : 'python3');
+const hasKokoro = () => spawnSync(PYTHON, ['-c', 'import importlib.util as u,sys; sys.exit(0 if u.find_spec("kokoro") and u.find_spec("soundfile") else 1)'], { stdio: 'ignore' }).status === 0;
+
+// Kokoro is the default voice whenever it is installed and speaks the scene's language. `kokoro: false` on a scene
+// or KHAN_TTS=say keeps the built-in voice. `kokoro: ...` or KHAN_TTS=kokoro demand it and fail loudly if they cannot have it.
+// Returns { takes, forced } or null.
 function kokoroTakes(meta, dir) {
+  if (meta.kokoro === false || process.env.KHAN_TTS === 'say') return null;
+  const forced = !!meta.kokoro || process.env.KHAN_TTS === 'kokoro';
   const o = typeof meta.kokoro === 'string' ? { voice: meta.kokoro } : meta.kokoro === true || !meta.kokoro ? {} : meta.kokoro;
   const voice = o.voice || KOKORO[meta.lang || 'en'];
   if (!voice) {
     if (meta.kokoro) die(`Kokoro does not speak lang '${meta.lang}'. It speaks ${Object.keys(KOKORO).join(', ')}.`);
-    return null;   // only KHAN_TTS asked for it: this language keeps the built-in voice
+    return null;   // this language keeps the built-in voice
+  }
+  if (!hasKokoro()) {
+    if (forced) die(`Kokoro is not installed for ${PYTHON}. Install it with: ${PYTHON} -m pip install kokoro soundfile (Python 3.10+; or: uv venv --python 3.11 .venv && uv pip install --python .venv/bin/python kokoro soundfile)`);
+    return null;   // not installed: quietly use the built-in voice
   }
   const said = meta.beats.map((b, i) => ({ i, text: b.say })).filter(b => b.text), speed = o.speed || 1;
   const cache = path.join(dir, '.voice', 'kokoro');
@@ -101,9 +115,12 @@ function kokoroTakes(meta, dir) {
   const todo = lines.filter(l => !fs.existsSync(l.out));
   if (todo.length) {
     fs.mkdirSync(cache, { recursive: true });
-    const py = process.env.KHAN_PYTHON || 'python3';
-    const r = spawnSync(py, [path.join(__dirname, 'kokoro_tts.py')], { input: JSON.stringify({ voice, speed, lines: todo }), stdio: ['pipe', 'inherit', 'inherit'] });
-    if (r.status !== 0) die(`Kokoro failed. Install it with: ${py} -m pip install kokoro soundfile (set KHAN_PYTHON to use another Python)`);
+    const r = spawnSync(PYTHON, [path.join(__dirname, 'kokoro_tts.py')], { input: JSON.stringify({ voice, speed, lines: todo }), stdio: ['pipe', 'inherit', 'inherit'] });
+    if (r.status !== 0) {
+      if (forced) die(`Kokoro failed. Install it with: ${PYTHON} -m pip install kokoro soundfile (set KHAN_PYTHON to use another Python)`);
+      console.error('Kokoro failed, using the built-in voice instead. Set KHAN_TTS=kokoro to see the error as a failure.');
+      return null;
+    }
   }
   return Object.fromEntries(lines.map(l => [l.i, l.out]));
 }
@@ -125,7 +142,7 @@ function kokoroTakes(meta, dir) {
   await page.evaluate(m => window.loadImages(m), Object.fromEntries(meta.bgs.map(f => [f, `data:${mime(f)};base64,` + fs.readFileSync(path.resolve(dir, f)).toString('base64')])));
 
   const takes = meta.eleven && !meta.audio ? await elevenTakes(meta.beats, meta.eleven, dir) : null;
-  const kok = !meta.audio && !takes && (meta.kokoro || process.env.KHAN_TTS === 'kokoro') ? kokoroTakes(meta, dir) : null;
+  const kok = !meta.audio && !takes ? kokoroTakes(meta, dir) : null;
   const voice = meta.audio || takes || kok ? null : voiceFor(meta);
   if (!meta.audio) console.log(`voice ${takes ? 'ElevenLabs' : kok ? 'Kokoro' : voice}`);
   const gap = meta.gap ?? (takes ? 0 : GAP);   // scene-level `gap` slows the pace: more air between beats. One take already has its own pauses.
@@ -166,12 +183,15 @@ function kokoroTakes(meta, dir) {
   }
   args.push('-t', total.toFixed(3), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '18', '-movflags', '+faststart', out);
   const ff = spawn('ffmpeg', args, { stdio: ['pipe', 'inherit', 'inherit'] });
+  const burn = process.env.KHAN_CAPTIONS === 'burn';
+  if (burn) await page.evaluate(() => window.setCaptions(true));
   for (let i = 0; i < Math.ceil(total * FPS); i++) {
     const buf = jpeg(await page.evaluate(t => window.frame(t), i / FPS));
     if (!ff.stdin.write(buf)) await once(ff.stdin, 'drain');
   }
   ff.stdin.end();
   await once(ff, 'close');
+  if (burn) await page.evaluate(() => window.setCaptions(false));   // the QA sheet shows the bare board
 
   // QA sheet: the board as it stands at the end of every beat, tiled into one image.
   for (let i = 0; i < timings.length; i++)
@@ -186,6 +206,16 @@ function kokoroTakes(meta, dir) {
   timings.forEach((t, i) => console.log(`beat ${i + 1}  ${t.start.toFixed(2)}s  +${t.dur.toFixed(2)}s  ${meta.beats[i].say || (meta.audio ? '' : '(silent)')}`));
   warns.forEach(w => console.log('WARN ' + w));
   console.log('sheet ' + sheet);
+  // Captions: one cue per spoken beat, written beside the video as .srt. KHAN_CAPTIONS=burn also draws them into the picture itself.
+  // A real-audio scene's `say` is only a note of what the speaker says, so it gets no captions.
+  if (!meta.audio) {
+    const stamp = t => { const ms = Math.round(t * 1000), z = (n, w = 2) => String(n).padStart(w, '0');
+      return `${z(Math.floor(ms / 3600000))}:${z(Math.floor(ms / 60000) % 60)}:${z(Math.floor(ms / 1000) % 60)},${z(ms % 1000, 3)}`; };
+    const cues = timings.map((t, i) => ({ t, text: meta.beats[i].say })).filter(c => c.text);
+    const srt = out.replace(/\.[^.\/]+$/, '') + '.srt';
+    fs.writeFileSync(srt, cues.map((c, i) => `${i + 1}\n${stamp(c.t.start)} --> ${stamp(c.t.start + c.t.dur)}\n${c.text}\n`).join('\n'));
+    console.log('captions ' + srt);
+  }
   const got = probe(out);
   if (Math.abs(got - total) > 0.1) die(`FAIL ${out} is ${got}s, expected ${total.toFixed(2)}s`);
   console.log(`ok ${out} ${got.toFixed(2)}s`);

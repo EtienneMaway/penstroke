@@ -1,4 +1,4 @@
-# khan-explainer
+# penstroke
 
 A Claude Code skill that makes Khan Academy style explainer videos: a pen draws while a voice explains. You describe the video, Claude writes a scene file, and one command renders the MP4.
 
@@ -39,8 +39,8 @@ scene({
 You need macOS, Node 20 or newer, and ffmpeg (`brew install ffmpeg`).
 
 ```sh
-git clone https://github.com/haiderfarooq3/khan-explainer ~/.claude/skills/khan-explainer
-cd ~/.claude/skills/khan-explainer/scripts && npm install && npx playwright install chromium
+git clone <your-repo-url> ~/.claude/skills/penstroke
+cd ~/.claude/skills/penstroke/scripts && npm install && npx playwright install chromium
 ```
 
 ## Use
@@ -56,22 +56,40 @@ Ask Claude Code for the video you want:
 Or render one of the examples yourself:
 
 ```sh
-cd ~/.claude/skills/khan-explainer
+cd ~/.claude/skills/penstroke
 node scripts/render.js examples/ai-agents.js agents.mp4                    # blackboard
 KHAN_THEME=light node scripts/render.js examples/ai-agents.js light.mp4    # whiteboard
 node scripts/render.js examples/ui-tutorial.js tutorial.mp4                # drawn over screenshots
 node scripts/render.js examples/arabic.js arabic.mp4                      # right-to-left writing
 node scripts/render.js examples/languages.js languages.mp4                # one word in eight languages
+node scripts/render.js examples/icons.js icons.mp4                        # every built-in icon
+node scripts/render.js examples/io-devices.js io.mp4                      # a lesson that uses them
 ```
 
 Each render also prints the path of a contact sheet: the board at the end of every beat, in one image. That sheet is how Claude checks its own layout before it shows you anything.
 
 [SKILL.md](SKILL.md) is the full reference: the scene API, layout rules, the capture recipe for tutorials and the clip pipeline.
 
+## Check your setup
+
+```sh
+node scripts/doctor.js
+```
+
+One line per requirement (Node, ffmpeg, Playwright, voice), with the exact fix for anything missing.
+
+## Captions
+
+Every render with a spoken voice also writes `<name>.srt` beside the video, one cue per beat. To draw the captions into the picture itself for sound-off viewing:
+
+```sh
+KHAN_CAPTIONS=burn node scripts/render.js examples/ai-agents.js out/agents.mp4
+```
+
 ## Optional extras
 
 - **A human voice.** Export `ELEVENLABS_API_KEY` and add `eleven: '<voice id>'` to a scene. The script is read in one take and cut back into beats, and takes are cached, so re-rendering the same words is free.
-- **Kokoro, a free local human voice.** `pip install kokoro soundfile`, then `kokoro: true` on a scene or `KHAN_TTS=kokoro` for any scene. English, Spanish, French, Hindi, Italian, Japanese, Portuguese and Chinese.
+- **Kokoro, a free local human voice, on by default once installed.** Python 3.10+: `uv venv --python 3.11 .venv && uv pip install --python .venv/bin/python kokoro soundfile`. The renderer finds `.venv` by itself, and every English, Spanish, French, Hindi, Italian, Japanese, Portuguese and Chinese scene then uses it. `kokoro: false` on a scene or `KHAN_TTS=say` keeps the built-in voice. First use downloads about 330 MB; takes are cached, so re-renders are fast.
 - **Any language on the board.** Arabic, Urdu and Hebrew are written right to left, Hindi, Thai, Chinese, Japanese, Korean, Russian and more left to right, each in a face that writes it properly. `lang: 'ar'` on a scene picks the matching voice. `node tests/run.js` renders them all.
 - **Real-audio clips** need [uv](https://docs.astral.sh/uv/). `scripts/clip_audio.py` transcribes locally with faster-whisper.
 - **The talking-head cutout** uses macOS Vision. It builds itself with `swiftc` the first time, which needs the Xcode command line tools.

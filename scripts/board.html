@@ -128,6 +128,79 @@ function check(x, y, p = 1, o = {}) {   // glyphs like a tick are missing from t
   stroke(curve([x, y + s * 0.55], mid, null, 8).concat(curve(mid, [x + s, y], null, 14)), p, { color: C.green, width: 6, ...o });
 }
 
+
+// ---- icons: small hand-drawn pictures built from the same wobbly strokes as everything else.
+// icon(name, cx, cy, p, {size, color, width}) draws one centred on (cx, cy), stroke by stroke as p runs 0..1.
+// Each icon is drawn in a 100x100 box. Ops: l line, c curve (with ctrl), o oval, b box, p polyline, a elliptical arc (degrees, 0 = right, 90 = down).
+const ellArc = (cx, cy, rx, ry, a0, a1, n = 28) => {
+  const pts = [];
+  for (let i = 0; i <= n; i++) {
+    const a = (a0 + (a1 - a0) * i / n) * Math.PI / 180, k = 1 + 0.015 * Math.sin(i * 0.9 + cx);
+    pts.push([cx + Math.cos(a) * rx * k, cy + Math.sin(a) * ry * k]);
+  }
+  return pts;
+};
+const polyline = pts => pts.slice(1).reduce((acc, q, i) => acc.concat(curve(pts[i], q, null, 8)), []);
+const polar = (n, r0, r1, rot = -90) => Array.from({ length: n * 2 + 1 }, (_, i) => {
+  const a = (rot + i * 180 / n) * Math.PI / 180, r = i % 2 ? r1 : r0;
+  return [50 + Math.cos(a) * r, 50 + Math.sin(a) * r];
+});
+const lumpy = (cx, cy, rx, ry, bumps, amp, n = 56) => Array.from({ length: n + 1 }, (_, i) => {
+  const a = i / n * Math.PI * 2 - Math.PI / 2, r = 1 + amp * Math.sin(a * bumps);
+  return [cx + Math.cos(a) * rx * r, cy + Math.sin(a) * ry * r];
+});
+const ICONS = {
+  person: [['o', 50, 22, 13, 13], ['l', [50, 36], [50, 68]], ['p', [[24, 52], [50, 45], [76, 52]]], ['p', [[30, 94], [50, 68], [70, 94]]]],
+  computer: [['b', 10, 14, 80, 52], ['l', [50, 66], [50, 82]], ['l', [28, 84], [72, 84]]],
+  laptop: [['b', 22, 20, 56, 40], ['p', [[22, 60], [8, 78], [92, 78], [78, 60]]]],
+  phone: [['b', 30, 6, 40, 88], ['l', [43, 82], [57, 82]]],
+  server: [['b', 14, 8, 72, 22], ['b', 14, 39, 72, 22], ['b', 14, 70, 72, 22], ['o', 28, 19, 3, 3], ['o', 28, 50, 3, 3], ['o', 28, 81, 3, 3]],
+  database: [['o', 50, 22, 32, 11], ['l', [18, 22], [18, 76]], ['l', [82, 22], [82, 76]], ['a', 50, 76, 32, 11, 0, 180], ['a', 50, 49, 32, 11, 0, 180]],
+  cloud: [['a', 30, 62, 15, 15, 90, 270], ['a', 48, 42, 20, 22, 205, 335], ['a', 72, 56, 17, 20, 275, 450], ['l', [30, 77], [72, 76]]],
+  brain: [['p', lumpy(50, 46, 40, 30, 9, 0.07)], ['c', [50, 17], [50, 76], [45, 46]], ['c', [20, 46], [42, 40], [30, 28]], ['c', [24, 62], [42, 58], [34, 48]], ['c', [80, 46], [58, 40], [70, 28]], ['c', [76, 62], [58, 58], [66, 48]], ['c', [54, 76], [62, 92], [64, 82]]],
+  gear: [['p', polar(8, 40, 30)], ['o', 50, 50, 13, 13]],
+  document: [['p', [[24, 8], [60, 8], [78, 26], [78, 92], [24, 92], [24, 8]]], ['p', [[60, 8], [60, 26], [78, 26]]], ['l', [36, 46], [66, 46]], ['l', [36, 60], [66, 60]], ['l', [36, 74], [56, 74]]],
+  bulb: [['a', 50, 38, 25, 25, 125, 415], ['p', [[36, 58], [40, 72], [60, 72], [64, 58]]], ['l', [42, 82], [58, 82]], ['l', [45, 91], [55, 91]]],
+  lock: [['b', 22, 44, 56, 44], ['a', 50, 44, 18, 22, 180, 360], ['o', 50, 62, 5, 5], ['l', [50, 67], [50, 78]]],
+  magnifier: [['o', 42, 42, 27, 27], ['l', [62, 62], [88, 88]]],
+  globe: [['o', 50, 50, 38, 38], ['l', [12, 50], [88, 50]], ['o', 50, 50, 17, 38], ['a', 50, 28, 31, 9, 0, 180], ['a', 50, 72, 31, 9, 180, 360]],
+  keyboard: [['b', 6, 26, 88, 48], ['l', [16, 38], [26, 38]], ['l', [36, 38], [46, 38]], ['l', [56, 38], [66, 38]], ['l', [76, 38], [84, 38]], ['l', [16, 50], [30, 50]], ['l', [40, 50], [50, 50]], ['l', [60, 50], [70, 50]], ['l', [78, 50], [84, 50]], ['l', [28, 63], [72, 63]]],
+  mouse: [['o', 50, 54, 24, 38], ['l', [50, 17], [50, 46]], ['l', [27, 46], [73, 46]]],
+  printer: [['p', [[30, 36], [30, 8], [70, 8], [70, 36]]], ['b', 8, 36, 84, 32], ['o', 80, 49, 3, 3], ['p', [[26, 68], [26, 92], [74, 92], [74, 68]]], ['l', [36, 78], [64, 78]], ['l', [36, 86], [56, 86]]],
+  drive: [['b', 8, 26, 84, 48], ['o', 26, 50, 4, 4], ['l', [44, 50], [84, 50]]],
+  star: [['p', polar(5, 44, 19)]],
+  chat: [['p', [[10, 16], [90, 16], [90, 66], [50, 66], [28, 88], [30, 66], [10, 66], [10, 16]]], ['l', [26, 34], [74, 34]], ['l', [26, 48], [58, 48]]],
+  wifi: [['a', 50, 80, 18, 18, 230, 310], ['a', 50, 80, 36, 36, 230, 310], ['a', 50, 80, 54, 54, 230, 310], ['o', 50, 78, 3, 3]],
+  camera: [['b', 8, 30, 84, 54], ['b', 34, 18, 32, 12], ['o', 50, 57, 17, 17]],
+  clock: [['o', 50, 50, 38, 38], ['l', [50, 50], [50, 26]], ['l', [50, 50], [68, 60]]],
+  speaker: [['p', [[10, 38], [28, 38], [50, 18], [50, 82], [28, 62], [10, 62], [10, 38]]], ['a', 54, 50, 16, 16, -50, 50], ['a', 54, 50, 30, 30, -50, 50]],
+};
+function icon(name, cx, cy, p = 1, o = {}) {
+  const ops = ICONS[name];
+  if (!ops) throw new Error(`no icon '${name}'. Icons: ${Object.keys(ICONS).join(', ')}`);
+  if (p <= 0) return;
+  const size = o.size || 100, k = size / 100, X = u => cx + (u - 50) * k, Y = v => cy + (v - 50) * k;
+  const pt = q => [X(q[0]), Y(q[1])];
+  const subs = ops.map(([t, ...a]) => {
+    if (t === 'l') return curve(pt(a[0]), pt(a[1]));
+    if (t === 'c') return curve(pt(a[0]), pt(a[1]), pt(a[2]));
+    if (t === 'o') return oval(X(a[0]), Y(a[1]), a[2] * k, a[3] * k);
+    if (t === 'b') return box(X(a[0]), Y(a[1]), a[2] * k, a[3] * k);
+    if (t === 'p') return polyline(a[0].map(pt));
+    if (t === 'a') return ellArc(X(a[0]), Y(a[1]), a[2] * k, a[3] * k, a[4], a[5]);
+  });
+  const total = subs.reduce((n, s) => n + s.length, 0);
+  let done = 0;
+  const style = { color: o.color, width: o.width || (size < 70 ? 4 : 5) };
+  for (const s of subs) {
+    const from = done / total; done += s.length;
+    stroke(s, seg(p, from, done / total), style);
+  }
+  const half = size / 2;   // so an icon landing on a label, or off the board, warns like any other text would
+  if (cx - half < 0 || cx + half > W || cy - half < 0 || cy + half > H) warns.add(`icon runs off the board: "${name}"`);
+  labels.push({ str: 'icon:' + name + cx + cy, x: cx - half, y: cy - half, w: size, h: size });
+}
+
 // ---- runtime
 window.scene = s => { S = s; if (s.theme) setTheme(s.theme); [W, H] = s.size || [W, H]; cv.width = W * SCALE; cv.height = H * SCALE; };
 window.loadImages = async map => { for (const [k, url] of Object.entries(map)) { const im = new Image(); im.src = url; await im.decode(); IMGS[k] = im; } };
@@ -138,6 +211,27 @@ function paint(name, alpha) {   // fit the screenshot inside the board, letterbo
 window.sceneMeta = () => S && { voice: S.voice, lang: S.lang, kokoro: S.kokoro, rate: S.rate || 170, gap: S.gap, audio: S.audio, eleven: S.eleven, size: [W, H], bgs: [...new Set(S.beats.map(b => b.bg).filter(Boolean))], beats: S.beats.map(b => ({ say: b.say || '', dur: b.dur, at: b.at })) };
 window.setTimings = t => { T = t; };
 window.warnings = () => [...warns];
+let CAPTIONS = false;
+window.setCaptions = on => { CAPTIONS = !!on; };
+// Burned-in caption: the sentence being spoken, wrapped, on a dark pill at the foot of the board.
+function caption(text) {
+  const sc = SCRIPTS.find(k => k.re.test(text)), size = W < H ? 30 : 28, max = W - (W < H ? 100 : 200), pad = 14, lead = size * 1.3;
+  g.font = `${sc?.bold ? 'bold ' : '600 '}${size}px ${sc ? sc.face + ',' : ''}system-ui,Arial,sans-serif`;
+  g.textAlign = 'center'; g.direction = sc && RTL.test(text) ? 'rtl' : 'ltr';
+  const lines = []; let cur = '';
+  for (const w of text.split(/(?<=\s)|(?<=[\u3000-\u9fff\uac00-\ud7af])/u)) {
+    if (cur && g.measureText(cur + w).width > max) { lines.push(cur.trim()); cur = ''; }
+    cur += w;
+  }
+  if (cur.trim()) lines.push(cur.trim());
+  const bw = Math.min(max, Math.max(...lines.map(l => g.measureText(l).width))) + pad * 2, bh = lines.length * lead + pad * 2 - 6;
+  const x = (W - bw) / 2, y = H - bh - (W < H ? 90 : 24);
+  g.save(); g.shadowBlur = 0; g.fillStyle = 'rgba(0,0,0,.72)';
+  g.beginPath(); g.roundRect(x, y, bw, bh, 14); g.fill();
+  g.fillStyle = '#fff'; g.textBaseline = 'alphabetic';
+  lines.forEach((l, i) => g.fillText(l, W / 2, y + pad + size * 0.85 + i * lead));
+  g.restore(); g.direction = 'ltr'; g.textAlign = 'left';
+}
 window.frame = t => {
   pen = null; labels = [];
   let from = 0, theme = BASE;   // a beat with clear or bg wipes the ink, so start from the latest one already reached
@@ -160,6 +254,10 @@ window.frame = t => {
     const a = labels[i], b = labels[j]; if (a.str === b.str) continue;
     const ox = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x), oy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
     if (ox > 0 && oy > 0 && ox * oy > 0.15 * Math.min(a.w * a.h, b.w * b.h)) warns.add(`labels overlap: "${a.str}" and "${b.str}"`);
+  }
+  if (CAPTIONS && !S.audio) {
+    const i = S.beats.findIndex((b, k) => b.say && t >= T[k].start && t < T[k].start + T[k].dur + 0.15);
+    if (i >= 0) caption(S.beats[i].say);
   }
   if (pen) { g.fillStyle = PEN; g.shadowColor = PEN; g.shadowBlur = 12; g.beginPath(); g.arc(pen[0], pen[1], 5, 0, 7); g.fill(); g.shadowBlur = 0; }
   return cv.toDataURL('image/jpeg', 0.95);

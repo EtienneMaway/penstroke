@@ -1,5 +1,5 @@
 {
-  "name": "khan-explainer",
+  "name": "penstroke",
   "private": true,
   "description": "Blackboard explainer renderer: canvas + Playwright + macOS say + ffmpeg",
   "dependencies": { "playwright": "1.62.1" }

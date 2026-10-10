@@ -1,9 +1,9 @@
 ---
-name: khan-explainer
+name: penstroke
 description: Use when the user wants a Khan Academy style explainer video, a blackboard or whiteboard lesson, a hand-drawn chalk-talk animation, a short narrated video that teaches a concept ("explain X in a video", "explainer video", "teach X in 30 seconds"), or a tutorial that draws hand-written arrows, circles and captions over product screenshots ("draw over the UI", "annotated walkthrough"), or clips cut from a YouTube video or podcast where the speaker's real audio plays under a blackboard drawn to it ("khanify this video", "clip this with the Khan visual"), especially when it must be free, local, and use no paid APIs or keys. macOS only.
 ---
 
-# Khan Explainer
+# Penstroke
 
 A pen draws while a voice explains. Three modes, one renderer:
 
@@ -14,7 +14,7 @@ A pen draws while a voice explains. Three modes, one renderer:
 One scene file in, one MP4 out, in seconds. Free and local: HTML canvas, Playwright, macOS `say`, ffmpeg. No keys.
 Every mode renders as chalk on a blackboard or marker on a whiteboard, landscape or vertical.
 
-Made by Haider Farooq ([github.com/haiderfarooq3](https://github.com/haiderfarooq3/khan-explainer)). Free for anyone to use and change (MIT).
+Based on khan-explainer by Haider Farooq ([github.com/haiderfarooq3/khan-explainer](https://github.com/haiderfarooq3/khan-explainer)). Free for anyone to use and change (MIT).
 
 **Core principle: the voice drives the clock.** A scene is a list of beats. A beat is one spoken clause plus the drawing that happens while it is said. The renderer speaks each beat first, measures it, and fits that beat's drawing to it. Never hardcode seconds or guess when a word lands.
 
@@ -23,13 +23,15 @@ Made by Haider Farooq ([github.com/haiderfarooq3](https://github.com/haiderfaroo
 1. **Script the beats.** One idea per beat, split at commas and full stops. Check the length formula below.
 2. **Plan the picture.** Lesson: lay out the whole board. Tutorial: capture the stills and their rectangles. Each has a section below.
 3. **Write `scene.js`** in a scratch folder. Copy `examples/ai-agents.js` for a lesson or `examples/ui-tutorial.js` for a tutorial.
-4. **Render:** `node ~/.claude/skills/khan-explainer/scripts/render.js scene.js out.mp4`
+4. **Render:** `node ~/.claude/skills/penstroke/scripts/render.js scene.js out.mp4`
 5. **Read the `sheet` image it prints.** It shows the board at the end of every beat. The same folder holds every beat full-size as `b000.jpg`, `b001.jpg` and so on. Open those to check that a ring really sits on a small button. Fix every `WARN` (text off the board, or one label on another), overlap and spill, then re-render. A render takes seconds, so iterate.
 6. Deliver the MP4 and say which voice it used.
 
 Each output line is `beat N  start  +duration`. The sheet path is new on every render.
 
-First run on a machine: `cd scripts && npm install && npx playwright install chromium`.
+First run on a machine: `cd scripts && npm install && npx playwright install chromium`, then `node scripts/doctor.js` to confirm everything a render needs is there.
+
+Every render also writes `<out>.srt` (one cue per spoken beat). `KHAN_CAPTIONS=burn` draws the captions onto the video as well, at the foot of the board: keep ink above y 640 on a landscape board when burning. Real-audio scenes get no captions, because their `say` is only a note.
 
 ## Length and pace
 
@@ -70,6 +72,7 @@ Every draw call is `(geometry, p, style)`. Points are `[x, y]` in board units.
 | `stroke(points, p, {color, width})` | Any shape, drawn progressively. |
 | `arrow(from, to, p, {color, ctrl})` | Arrow. `ctrl` is a point that bends it. |
 | `check(x, y, p, {size, color})` | Tick mark. |
+| `icon(name, cx, cy, p, {size, color})` | A hand-drawn picture centred on `(cx, cy)`, about `size` wide (default 100), drawn stroke by stroke. `Object.keys(ICONS)` lists them: person, computer, laptop, phone, server, database, cloud, brain, gear, document, bulb, lock, magnifier, globe, keyboard, mouse, printer, drive, star, chat, wifi, camera, clock, speaker. Use size 70 to 90 beside a label. It warns if it runs off the board or lands on a label. See `examples/icons.js`. |
 | `line(a, b)` `curve(a, b, ctrl)` `oval(cx, cy, rx, ry)` `box(x, y, w, h)` | Return points for `stroke`. |
 | `ring(rect, pad)` `around(rect, pad)` | An oval or a frame around a `{x, y, w, h}` rectangle, for `stroke`. |
 | `view(captureWidth, cropTop)` | Maps screenshot positions to the board. `.r(rect)` for a rectangle, `.p(x, y)` for a point. |
@@ -116,7 +119,7 @@ On a white board every hard edge shows, so look at the light sheet separately fr
 
 ## A human voice (optional)
 
-`say` is free and robotic. For a human voice, export `ELEVENLABS_API_KEY` and name a voice on the scene:
+`say` is free and robotic. Kokoro (below) is the free human voice. For a paid human voice, export `ELEVENLABS_API_KEY` and name a voice on the scene:
 
 ```js
 scene({ eleven: '<voice id>', beats: [...] })
@@ -128,14 +131,14 @@ scene({ eleven: { voice: '<voice id>', model: 'eleven_multilingual_v2', settings
 - Takes are cached in `.voice/` beside the scene. Re-rendering the same words is free, so lay the board out with `say` first, then switch the voice on and change only drawings.
 - Changing any `say` buys a new take of the whole script.
 
-**Kokoro: a free local human voice.** `pip install kokoro soundfile` once (for Japanese add `"misaki[ja]"` and run `python -m unidic download`; for Chinese add `"misaki[zh]"`), then put `kokoro: true` on the scene, or a voice name (`kokoro: 'am_michael'`), or `{ voice, speed }`. `KHAN_TTS=kokoro` tries it on any scene without editing it. It speaks English, Spanish, French, Hindi, Italian, Japanese, Portuguese and Chinese, and `lang` picks its voice. For Arabic, Urdu, Hebrew and the rest, `KHAN_TTS` leaves the built-in voice on; use `eleven` for a human voice there. The model downloads on first use (about 330 MB), then runs offline. Takes are cached in `.voice/kokoro/`. `KHAN_PYTHON` names the Python that has it installed.
+**Kokoro: a free local human voice, the default once installed.** Python 3.10+: `uv venv --python 3.11 .venv && uv pip install --python .venv/bin/python kokoro soundfile` in the project folder (for Japanese add `"misaki[ja]"` and run `python -m unidic download`; for Chinese add `"misaki[zh]"`). With it installed, every scene in a language it speaks (English, Spanish, French, Hindi, Italian, Japanese, Portuguese, Chinese) uses it with no flag: `kokoro: 'am_michael'` or `{ voice, speed }` picks a voice, `kokoro: false` or `KHAN_TTS=say` keeps the built-in one. If it is not installed, or `lang` is one it does not speak (Arabic, Urdu, Hebrew and the rest), the built-in voice is used quietly; use `eleven` for a human voice there. `KHAN_TTS=kokoro` or `kokoro: true` demand it and fail with the fix if it is missing. The model downloads on first use (about 330 MB), then runs offline. Takes are cached in `.voice/kokoro/`. `KHAN_PYTHON` names another Python; otherwise `.venv` in the project is used.
 
 ## Blackboard lessons
 
 - **Lay out the whole board before writing code.** 1280×720 units, 60 margin, title top-left. List each shape's centre and size for every beat, including the last, so the finished board fills the width instead of crowding one side.
 - One colour per concept, reused whenever that concept returns.
 - Draw what is being said as it is said. Never reveal a finished diagram.
-- Diagrams and short labels only. No sentences on the board, no logos, no stock images.
+- Diagrams and short labels only. No sentences on the board, no logos, no stock images. Use `icon()` for the things in a diagram (a person, a server, a cloud) instead of drawing them by hand.
 - Talk like a tutor: plain words, "so", "now", "let's say". No term the board has not introduced.
 - Exaggerate scale. If two things differ, draw the difference big enough to see at a glance.
 - The board accumulates. Add `clear: true` only when it is full, roughly every 5–6 beats.

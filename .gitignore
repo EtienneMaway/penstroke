@@ -4,3 +4,4 @@ scripts/cutout
 .DS_Store
 *.mp4
 out/
+.venv/
