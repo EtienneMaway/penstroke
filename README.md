@@ -2,6 +2,8 @@
 
 A Claude Code skill that makes Khan Academy style explainer videos: a pen draws while a voice explains. You describe the video, Claude writes a scene file, and one command renders the MP4.
 
+> penstroke is built on [**khan-explainer**](https://github.com/haiderfarooq3/khan-explainer) by [Haider Farooq](https://github.com/haiderfarooq3): the original idea, the renderer and the pen-follows-the-voice design are his. See [Credits](#credits) for what has been added since.
+
 ![The same scene on the blackboard and on the whiteboard](docs/board.jpg)
 
 It runs on your Mac with an HTML canvas, Playwright, ffmpeg and the built-in `say` voice. No API keys, no accounts, no editor.
@@ -135,6 +137,19 @@ KHAN_CAPTIONS=burn node scripts/render.js examples/ai-agents.js out/agents.mp4
 
 ## Credits
 
-Made by [Haider Farooq](https://github.com/haiderfarooq3). MIT licensed: use it, change it, ship videos with it.
+penstroke is a fork of [**khan-explainer**](https://github.com/haiderfarooq3/khan-explainer) by [Haider Farooq](https://github.com/haiderfarooq3), released under the MIT license. The core idea, the scene format, the renderer and the voice-driven timing are his work. Go and star the original.
+
+**Added in penstroke**
+
+- Kokoro as the default free voice once installed, with the built-in voice as the fallback
+- Captions: `.srt` on every render, and burned-in on request
+- `node scripts/doctor.js` to check a machine is ready
+- A library of 24 hand-drawn icons (`icon()`)
+- Fast iteration: `--sheet`, `--preview` and `--beats`
+- Export presets for TikTok, Reels, Shorts, Instagram, LinkedIn and YouTube
+- A vertical-native example, an I/O systems lesson, a README gallery and `scripts/gif.js`
+- See [ROADMAP.md](ROADMAP.md) for what is next
+
+MIT licensed: use it, change it, ship videos with it. The license keeps Haider Farooq's copyright notice, as MIT requires.
 
 Not affiliated with or endorsed by Khan Academy. "Khan Academy style" describes the look: handwriting on a board, drawn as it is explained.
