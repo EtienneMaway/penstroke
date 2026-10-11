@@ -3,6 +3,15 @@
 // A language with no built-in voice on this machine is reported as skipped, not failed.
 const { spawnSync } = require('child_process');
 const fs = require('fs'), path = require('path');
+// On GitHub Actions, also report every FAIL as an annotation: those are readable without a login, the log text is not.
+if (process.env.GITHUB_ACTIONS) {
+  const log = console.log;
+  console.log = (...a) => {
+    log(...a);
+    const s = a.join(' ');
+    if (/^FAIL\b/.test(s) || /^\s+(got:|WARN)/.test(s)) log(`::error title=penstroke test::${s.replace(/[\r\n]+/g, ' | ').slice(0, 400)}`);
+  };
+}
 const root = path.join(__dirname, '..'), out = path.resolve(process.argv[2] || path.join(root, 'out'));
 fs.mkdirSync(out, { recursive: true });
 const scenes = [...fs.readdirSync(path.join(root, 'examples')).filter(f => f.endsWith('.js')).map(f => path.join(root, 'examples', f)),
