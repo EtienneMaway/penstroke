@@ -81,6 +81,7 @@ node scripts/render.js examples/ui-tutorial.js tutorial.mp4                # dra
 node scripts/render.js examples/arabic.js arabic.mp4                      # right-to-left writing
 node scripts/render.js examples/languages.js languages.mp4                # one word in eight languages
 node scripts/render.js examples/icons.js icons.mp4                        # every built-in icon
+node scripts/render.js examples/camera.js camera.mp4                      # zoom and pan across a wide board
 node scripts/render.js examples/ai-agents-vertical.js short.mp4 --preset tiktok   # drawn for a phone
 node scripts/render.js examples/io-devices.js io.mp4                      # a lesson that uses them
 ```
@@ -158,6 +159,7 @@ penstroke is a fork of [**khan-explainer**](https://github.com/haiderfarooq3/kha
 - Captions: `.srt` on every render, and burned-in on request
 - `node scripts/doctor.js` to check a machine is ready
 - A library of 24 hand-drawn icons (`icon()`)
+- A camera: `cam: { rect: [x, y, w, h] }` on a beat zooms to a region, `cam: false` pulls back
 - Fast iteration: `--sheet`, `--preview` and `--beats`
 - Export presets for TikTok, Reels, Shorts, Instagram, LinkedIn and YouTube
 - Sound: your own music file, looped and ducked under the voice, and an optional soft pen scratch that follows the drawing

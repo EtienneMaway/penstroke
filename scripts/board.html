@@ -271,6 +271,35 @@ function caption(text) {
   lines.forEach((l, i) => g.fillText(l, W / 2, y + pad + size * 0.85 + i * lead));
   g.restore(); g.direction = 'ltr'; g.textAlign = 'left';
 }
+// ---- camera: a beat's `cam` moves the view. { rect: [x, y, w, h] } fits that region, { x, y, zoom } is a centre and a
+// magnification, and `false` (or 'reset') pulls back to the whole board. The move eases in over the start of the beat.
+const ease = u => u * u * (3 - 2 * u);
+function camTarget(c) {
+  if (!c || c === 'reset') return { cx: W / 2, cy: H / 2, z: 1 };
+  let z = c.zoom ?? c.z ?? 1, cx = c.x ?? W / 2, cy = c.y ?? H / 2;
+  if (c.rect) {
+    const r = Array.isArray(c.rect) ? { x: c.rect[0], y: c.rect[1], w: c.rect[2], h: c.rect[3] } : c.rect, m = c.margin ?? 0.1;
+    z = Math.min(W / (r.w * (1 + 2 * m)), H / (r.h * (1 + 2 * m)));
+    cx = r.x + r.w / 2; cy = r.y + r.h / 2;
+  }
+  z = Math.max(1, Math.min(z, 6));   // never zoom out past the board, never past 6x
+  const hw = W / (2 * z), hh = H / (2 * z);   // keep the view inside the board
+  return { cx: Math.max(hw, Math.min(W - hw, cx)), cy: Math.max(hh, Math.min(H - hh, cy)), z };
+}
+const camMix = (k, tt) => {
+  const e = ease(clamp((tt - k.t0) / k.d));
+  return { cx: k.from.cx + (k.to.cx - k.from.cx) * e, cy: k.from.cy + (k.to.cy - k.from.cy) * e, z: k.from.z * Math.pow(k.to.z / k.from.z, e) };
+};
+function camAt(t) {
+  let key = null;
+  S.beats.forEach((b, i) => {
+    if (b.cam === undefined || t < T[i].start) return;
+    const from = key ? camMix(key, T[i].start) : { cx: W / 2, cy: H / 2, z: 1 };
+    key = { from, to: camTarget(b.cam), t0: T[i].start, d: Math.max(0.05, (b.cam && b.cam.dur) ?? Math.min(0.9, T[i].dur * 0.6)) };
+  });
+  return key ? camMix(key, t) : { cx: W / 2, cy: H / 2, z: 1 };
+}
+
 function draw(t) {
   pen = null; labels = []; arrowsList = []; boxes = [];
   let from = 0, theme = BASE;   // a beat with clear or bg wipes the ink, so start from the latest one already reached
@@ -278,6 +307,9 @@ function draw(t) {
   S.beats.forEach((b, i) => { if (t < T[i].start) return; if (b.clear || b.bg) from = i; if (b.clear) bgs.length = 0; if (b.bg) bgs.push(i); if (b.theme) theme = b.theme; });   // clear takes the screenshot away too
   useTheme(theme);   // a beat's `theme` flips the board from that beat on, and the ink already on it changes with it
   g.setTransform(SCALE, 0, 0, SCALE, PAD.l * SCALE, PAD.t * SCALE); g.shadowBlur = 0; g.fillStyle = BG; g.fillRect(-PAD.l, -PAD.t, W + PAD.l + PAD.r, H + PAD.t + PAD.b);
+  const cam = camAt(t);
+  g.save();   // the camera moves the board, not the captions
+  if (cam.z > 1.0001) { g.beginPath(); g.rect(0, 0, W, H); g.clip(); g.translate(W / 2 - cam.cx * cam.z, H / 2 - cam.cy * cam.z); g.scale(cam.z, cam.z); }
   if (bgs.length) {
     const cur = bgs[bgs.length - 1], prev = bgs[bgs.length - 2], a = clamp((t - T[cur].start) / FADE);
     if (a < 1 && prev !== undefined) paint(S.beats[prev].bg, 1);
@@ -294,11 +326,12 @@ function draw(t) {
     const ox = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x), oy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
     if (ox > 0 && oy > 0 && ox * oy > 0.15 * Math.min(a.w * a.h, b.w * b.h)) warns.add(`labels overlap: "${a.str}" and "${b.str}"`);
   }
+  if (pen) { g.fillStyle = PEN; g.shadowColor = PEN; g.shadowBlur = 12; g.beginPath(); g.arc(pen[0], pen[1], 5, 0, 7); g.fill(); g.shadowBlur = 0; }
+  g.restore();
   if (CAPTIONS && !S.audio) {
     const i = S.beats.findIndex((b, k) => b.say && t >= T[k].start && t < T[k].start + T[k].dur + 0.15);
     if (i >= 0) caption(S.beats[i].say);
   }
-  if (pen) { g.fillStyle = PEN; g.shadowColor = PEN; g.shadowBlur = 12; g.beginPath(); g.arc(pen[0], pen[1], 5, 0, 7); g.fill(); g.shadowBlur = 0; }
 }
 window.frame = t => { draw(t); return cv.toDataURL('image/jpeg', 0.95); };
 // Is the pen mid-stroke at each step? Drawn without encoding a picture, so it is cheap; it times the scratch sound.

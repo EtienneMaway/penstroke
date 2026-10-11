@@ -13,7 +13,7 @@ Where penstroke is going. Ordered by how much each item improves the videos peop
 - [x] **Icon library** (`icon('cloud', x, y, p)`, 24 icons, `examples/icons.js`). More icons and shapes welcome.
 - [ ] **True handwriting animation.** Text drawn stroke by stroke instead of typed in a font.
 - [ ] **Auto-layout.** Automatic spacing and overlap detection instead of placing everything by pixel coordinates.
-- [ ] **Camera moves.** Zoom and pan to a region while drawing, so large diagrams stay readable.
+- [x] **Camera moves** (`cam: { rect }`, `{ x, y, zoom }`, `false`; `examples/camera.js`).
 
 ## 3. Easier to use
 

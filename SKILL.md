@@ -82,6 +82,22 @@ Every draw call is `(geometry, p, style)`. Points are `[x, y]` in board units.
 
 Text width is about `0.45 × size` per character for a normal label and `0.63 × size` per capital. Work it out before placing a label beside anything.
 
+## Camera
+
+A beat's `cam` moves the view over the board, so one wide diagram can be read in small parts.
+
+```js
+{ say: 'A server builds the page.', cam: { rect: [900, 130, 300, 280] }, draw: p => { ... } },   // fit this region
+{ say: 'Look closer here.', cam: { x: 640, y: 360, zoom: 2.5 }, draw: p => { ... } },             // a centre and a magnification
+{ say: 'And back to the whole picture.', cam: false, draw: p => { ... } },                        // pull back
+```
+
+- The move eases in over the first part of the beat (at most 0.9 s; `cam: { rect, dur: 0.5 }` changes it) and the view stays there until another `cam`. A beat with no `cam` leaves the camera where it is.
+- `rect` is `[x, y, w, h]` or an `{x, y, w, h}` object (so `view().r(...)` works) and fits that region with a 10% margin (`margin: 0.2` for more). Zoom is limited to 1x to 6x, and the view never leaves the board.
+- Draw the thing, then move to it: put the `cam` on the beat that draws it, so the pen is already where the viewer is looking. Pull back (`cam: false`) for the last beat so the viewer sees the whole picture.
+- Captions and the phone-UI margins do not move with the camera, but lines and text scale with it. Write for the zoomed-out board: labels at size 28 and up are fine at 2x, and a view tighter than about 3x gets soft.
+- The contact sheet shows each beat's end view, so a zoomed beat shows its zoomed frame. `examples/camera.js` is the worked example.
+
 ## Other languages
 
 `write` takes any script and writes it the way that script is written by hand. The first letter of the string decides the direction; its script picks the face.
