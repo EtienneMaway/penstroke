@@ -82,6 +82,20 @@ Every draw call is `(geometry, p, style)`. Points are `[x, y]` in board units.
 
 Text width is about `0.45 × size` per character for a normal label and `0.63 × size` per capital. Work it out before placing a label beside anything.
 
+## Translate a finished video
+
+The same drawings, new narration, voice, on-board text and captions. Claude does the translating, so no API key is needed.
+
+1. **List what has to be covered:** `node render.js scene.js --strings > scene.es.json`. It prints every spoken line and every piece of on-board text once, as `{ "original": "" }`.
+2. **Fill every value** with the translation, in the same JSON file. Keep a string as it is by writing it out unchanged (numbers, brand names). Translate a line as a spoken line: natural speech, not word for word, since the drawing is timed to it.
+3. **Render:** `node render.js scene.js out.mp4 --lang es`. It reads `scene.es.json` beside the scene (or `--translations path`), speaks with the voice for `es`, and keeps the original timing logic: each beat lasts as long as the new sentence takes.
+
+- Any string left empty or missing is **reported** (`WARN no translation for: "..."`) and shown in the original language. Never ship a render that has one.
+- The scene's own `voice` is ignored under `--lang` so the language picks the voice. Use `eleven` or `audio` for a language with no built-in voice.
+- Moving between a left-to-right and a right-to-left script keeps the left edge of each label where it was, so a diagram does not mirror itself. A centred label stays centred.
+- A translation that is longer overflows its shape: the usual `WARN`s (text off the board, labels overlapping) say so. Shorten the words, or give the label `size`/`fit()`.
+- **Limits:** text inside a screenshot (`bg`) cannot be translated. A scene that builds text from variables (`'Step ' + n`) lists the built string, so give each built string its own entry. `examples/ai-agents.es.json` and `examples/ai-agents.ar.json` show the format.
+
 ## Layout helpers: no pixel arithmetic
 
 For diagrams of labelled things in a row, a column or a grid, let the board place them. Everything below is optional; `write`, `stroke` and the rest still work as before.

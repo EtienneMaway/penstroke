@@ -12,7 +12,8 @@ const die = m => { console.error(m); process.exit(1); };
 const argv = process.argv.slice(2), pos = [], opt = {};
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
-  if (a === '--preview' || a === '--sheet' || a === '--no-captions' || a === '--sfx') opt[a.slice(2)] = true;
+  if (a === '--preview' || a === '--sheet' || a === '--no-captions' || a === '--sfx' || a === '--strings') opt[a.slice(2)] = true;
+  else if (a === '--lang' || a === '--translations') opt[a.slice(2)] = argv[++i];
   else if (a === '--music') opt.music = argv[++i];
   else if (a === '--preset') opt.preset = argv[++i];
   else if (a === '--beats' || a === '--beat') opt.beats = argv[++i];
@@ -20,7 +21,7 @@ for (let i = 0; i < argv.length; i++) {
   else pos.push(a);
 }
 const [sceneFile, out] = pos;
-if (!sceneFile || (!out && !opt.sheet)) die('usage: node render.js <scene.js> <out.mp4> [--preview] [--beats 3-5]\n       node render.js <scene.js> --sheet');
+if (!sceneFile || (!out && !opt.sheet && !opt.strings)) die('usage: node render.js <scene.js> <out.mp4> [--preview] [--beats 3-5]\n       node render.js <scene.js> --sheet');
 const PREVIEW = !!(opt.preview || opt.sheet);
 // Export formats. A scene keeps its own shape; if it is not the preset's shape it is centred on a taller or wider board of
 // the same colour, so nothing is cropped or stretched. Vertical formats put the captions on the empty board under the drawing.
@@ -35,8 +36,22 @@ let chromium;
 try { ({ chromium } = require('playwright')); }
 catch { die(`playwright missing. Run: node ${__dirname}/doctor.js`); }
 
+// Renders leave a folder behind on purpose: the contact sheet and the beat frames are read after the run. Clear out the ones
+// from earlier days so they do not pile up, and (below) drop the audio from this one when it is done.
+for (const d of fs.readdirSync(os.tmpdir())) {
+  if (!d.startsWith('khan-')) continue;
+  try { const p = path.join(os.tmpdir(), d); if (Date.now() - fs.statSync(p).mtimeMs > 24 * 3600 * 1000) fs.rmSync(p, { recursive: true, force: true }); } catch {}
+}
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'khan-'));
 const probe = f => parseFloat(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', f]));
+// A frame normally takes milliseconds. If the browser stops answering, say so instead of waiting for ever (ffmpeg would
+// otherwise sit there padding silence until someone notices).
+const within = async (promise, ms, what) => {
+  let timer;   // cleared when the frame arrives: a timer left pending would keep the process alive for ms after the last frame
+  try {
+    return await Promise.race([promise, new Promise((_, rej) => { timer = setTimeout(() => rej(new Error(`${what} took longer than ${ms / 1000}s: the browser has stopped responding`)), ms); })]);
+  } finally { clearTimeout(timer); }
+};
 const jpeg = dataUrl => Buffer.from(dataUrl.split(',')[1], 'base64');
 
 // ponytail: one `say` take per beat, so intonation resets at every beat and the voice is robotic.
@@ -153,9 +168,27 @@ function kokoroTakes(meta, dir) {
   await page.goto(require('url').pathToFileURL(path.join(__dirname, 'board.html')).href);   // a plain 'file://' + path is invalid for C:\ paths
   // The scene gets its own scope: a scene variable named like a helper (box, line, ring) must not be a redeclaration error.
   await page.addScriptTag({ content: `(() => {\n${fs.readFileSync(path.resolve(sceneFile), 'utf8')}\n})();` });
-  const meta = await page.evaluate(() => window.sceneMeta());
+  let meta = await page.evaluate(() => window.sceneMeta());
   if (errs.length || !meta) die(`scene failed to load: ${errs.join('; ') || 'scene({...}) was never called'}`);
 
+  // --strings lists everything a translator must cover. --lang es then renders the same drawings in Spanish, from
+  // <scene>.es.json (or --translations path): narration, on-board text and captions come from it, and the voice follows `lang`.
+  if (opt.strings) {
+    const list = await page.evaluate(() => window.strings());
+    console.log(JSON.stringify(Object.fromEntries(list.map(s => [s, ''])), null, 2));
+    await browser.close();
+    return;
+  }
+  if (opt.lang) {
+    const file = opt.translations ? path.resolve(opt.translations) : path.join(path.dirname(path.resolve(sceneFile)), `${path.basename(sceneFile, '.js')}.${opt.lang}.json`);
+    if (!fs.existsSync(file)) die(`no translations for '${opt.lang}': expected ${file}\nMake a template with: node render.js ${sceneFile} --strings > ${path.basename(file)}   then fill in every value.`);
+    let map;
+    try { map = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { die(`${file} is not valid JSON: ${e.message}`); }
+    await page.evaluate(([m, l]) => window.setTranslations(m, l), [map, opt.lang]);
+    meta = await page.evaluate(() => window.sceneMeta());
+    meta.voice = undefined;   // the scene's voice speaks its own language: let `lang` choose
+    if (meta.kokoro && meta.kokoro !== true) meta.kokoro = true;
+  }
   let outSize = null;   // the video's pixel size when a preset sets it
   if (preset) {
     const [W, H] = meta.size, A = preset.w / preset.h, pad = { l: 0, t: 0, r: 0, b: 0 };
@@ -259,7 +292,7 @@ function kokoroTakes(meta, dir) {
         ? `${delayed};${clips.map((_, i) => `[a${i}]`).join('')}amix=inputs=${clips.length}:normalize=0[vraw]`
         : `[${1 + clips.length}:a]aresample=48000[vraw]`;
       let graph;
-      if (!extras.length) graph = `${voice};[vraw]apad[${out_}]`;
+      if (!extras.length) graph = `${voice};[vraw]apad=whole_dur=${total.toFixed(3)}[${out_}]`;
       else {
         const st = 'aformat=channel_layouts=stereo';
         const music = extras.findIndex(e => e.kind === 'music'), sfx = extras.findIndex(e => e.kind === 'sfx');
@@ -267,12 +300,12 @@ function kokoroTakes(meta, dir) {
         const labels = ['[vd]'];
         if (music >= 0) {
           const e = extras[music], fadeAt = Math.max(0, total - 1.5);
-          parts.push(`[${nIn(music)}:a]aresample=48000,${st},volume=${e.volume},afade=t=in:d=1,afade=t=out:st=${fadeAt.toFixed(2)}:d=1.5[m0]`);
+          parts.push(`[${nIn(music)}:a]aresample=48000,${st},volume=${e.volume},atrim=end=${total.toFixed(3)},afade=t=in:d=1,afade=t=out:st=${fadeAt.toFixed(2)}:d=1.5[m0]`);
           parts.push('[m0][vs]sidechaincompress=threshold=0.02:ratio=14:attack=20:release=700[md]');   // the music ducks while someone speaks
           labels.push('[md]');
         }
         if (sfx >= 0) { parts.push(`[${nIn(sfx)}:a]aresample=48000,${st},volume=${extras[sfx].volume}[sx]`); labels.push('[sx]'); }
-        parts.push(`${labels.join('')}amix=inputs=${labels.length}:normalize=0:duration=longest,apad[${out_}]`);
+        parts.push(`${labels.join('')}amix=inputs=${labels.length}:normalize=0:duration=longest,apad=whole_dur=${total.toFixed(3)}[${out_}]`);
         graph = parts.join(';');
       }
       const cut = ranged ? `;[full]atrim=start=${t0.toFixed(3)}:end=${t1.toFixed(3)},asetpts=PTS-STARTPTS[a]` : '';
@@ -284,7 +317,7 @@ function kokoroTakes(meta, dir) {
     const burn = (process.env.KHAN_CAPTIONS === 'burn' || (preset?.captions && !meta.audio)) && !opt['no-captions'];
     if (burn) await page.evaluate(() => window.setCaptions(true));
     for (let i = Math.round(t0 * FPS); i < Math.round(t0 * FPS) + Math.ceil(span * FPS); i++) {
-      const buf = jpeg(await page.evaluate(t => window.frame(t), i / FPS));
+      const buf = jpeg(await within(page.evaluate(t => window.frame(t), i / FPS), 60000, `frame ${i}`));
       if (!ff.stdin.write(buf)) await once(ff.stdin, 'drain');
     }
     ff.stdin.end();
@@ -303,6 +336,7 @@ function kokoroTakes(meta, dir) {
   await page.evaluate(() => window.lint());
   const warns = await page.evaluate(() => window.warnings());
   await browser.close();
+  for (const f of fs.readdirSync(tmp)) if (/\.(wav|aiff|mp3|txt)$/.test(f)) fs.rmSync(path.join(tmp, f), { force: true });   // keep only the sheet and beat frames
 
   timings.forEach((t, i) => console.log(`beat ${i + 1}  ${t.start.toFixed(2)}s  +${t.dur.toFixed(2)}s  ${meta.beats[i].say || (meta.audio ? '' : '(silent)')}`));
   warns.forEach(w => console.log('WARN ' + w));

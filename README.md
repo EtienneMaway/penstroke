@@ -105,6 +105,18 @@ node scripts/render.js scene.js out.mp4 --beats 4-6     # only those beats, with
 
 Then render the full video once the sheet is clean.
 
+## Translate a finished video
+
+Same drawings, new narration, voice, text and captions:
+
+```sh
+node scripts/render.js scene.js --strings > scene.es.json      # every string to translate, once each
+# fill in the values (Claude Code can do this for you), then:
+node scripts/render.js scene.js out-es.mp4 --lang es           # reads scene.es.json
+```
+
+`examples/ai-agents.es.json` and `ai-agents.ar.json` are worked examples (Arabic flips to right-to-left). Strings with no translation are reported, never shown silently in the wrong language.
+
 ## Sound
 
 Nothing is added unless you ask. Music is only ever a file you pass:
@@ -161,6 +173,7 @@ penstroke is a fork of [**khan-explainer**](https://github.com/haiderfarooq3/kha
 - `node scripts/doctor.js` to check a machine is ready
 - A library of 24 hand-drawn icons (`icon()`)
 - A camera: `cam: { rect: [x, y, w, h] }` on a beat zooms to a region, `cam: false` pulls back
+- Translate a finished video: `--strings` lists what to translate, `--lang es` renders it again in another language
 - Layout helpers, no pixel arithmetic: `row()`, `col()`, `grid()`, `node()`, `connect()`, `title()`, `fit()`
 - Fast iteration: `--sheet`, `--preview` and `--beats`
 - Export presets for TikTok, Reels, Shorts, Instagram, LinkedIn and YouTube

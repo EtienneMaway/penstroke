@@ -44,6 +44,7 @@ let S = null, T = [], W = 1280, H = 720, pen = null;
 const IMGS = {}, FADE = 0.3;   // screenshot backgrounds, and their cross-fade in seconds
 const warns = new Set();
 let labels = [];   // text boxes drawn this frame, to catch one label landing on another
+let TR = null, COLLECT = null;   // translations (original -> new), and a list that collects strings when extracting them
 let inkN = 0, arrowsList = [], boxes = [];   // ink calls so far, arrow paths and stroke bounds: for lint()
 
 // ---- shapes: each returns [x, y] points for stroke(). Wobble is sin-based, never
@@ -97,14 +98,27 @@ function fontSpec(str, size, o = {}) {
   const font = !shaped ? `bold ${size}px ${FONT}` : latin ? `bold ${size}px ${FONT},${face}` : `${sc.bold ? 'bold ' : ''}${size}px ${face},${FONT}`;
   return { shaped, rtl, font };
 }
+const HAS_LETTER = /\p{L}/u;
 function write(str, x, y, p = 1, o = {}) {
   if (p <= 0) return;
   inkN++;
+  const orig = str;
+  let trans = false;
+  if (HAS_LETTER.test(str)) {
+    if (COLLECT) COLLECT.push(str);
+    if (TR) {
+      if (TR[str]) { str = TR[str]; trans = true; }
+      else warns.add(`no translation for: "${str}"`);
+    }
+  }
   const size = o.size || 36, { shaped, rtl, font } = fontSpec(str, size, o);
+  // Moving between a left-to-right and a right-to-left script: keep the text where the original's left edge was, instead of
+  // pinning the wrong end to x. Measured before the font is set for this string.
+  const origRtl = trans && fontSpec(orig, size, o).rtl, origW = trans && origRtl !== rtl && !o.center ? textW(orig, size, o) : 0;
   g.font = font;
   g.fillStyle = o.color || C.white; g.textAlign = 'left';
   if (shaped) g.direction = rtl ? 'rtl' : 'ltr';
-  const m = g.measureText(str), full = m.width, lx = o.center ? x - full / 2 : rtl ? x - full : x;   // x is where the pen starts: the right end of right-to-left text
+  const m = g.measureText(str), full = m.width, lx = o.center ? x - full / 2 : trans && origRtl !== rtl ? (origRtl ? x - origW : x) : rtl ? x - full : x;   // x is where the pen starts: the right end of right-to-left text
   // Ink, not advance width: a nastaliq word or a Thai tone mark can reach past the box the text advances by.
   // Nastaliq also stacks its letters far above the line.
   const ink0 = shaped ? lx - m.actualBoundingBoxLeft : lx, ink1 = shaped ? lx + m.actualBoundingBoxRight : lx + full;
@@ -309,6 +323,29 @@ window.setTimings = t => { T = t; };
 window.setScale = k => { SCALE = k; resize(); };   // preview renders at a fraction of the pixels
 window.setPad = p => { PAD = { l: 0, t: 0, r: 0, b: 0, ...p }; resize(); };
 window.warnings = () => [...warns];
+// Translation: `map` is { original: translated }. Strings with no entry stay as written and are reported.
+window.setTranslations = (map, lang) => {
+  TR = map;
+  if (lang) S.lang = lang;
+  S.beats.forEach(b => {
+    if (!b.say || !HAS_LETTER.test(b.say)) return;
+    if (map[b.say]) b.say = map[b.say]; else warns.add(`no translation for: "${b.say}"`);
+  });
+};
+// Every string a viewer reads or hears, in order, once each: what a translator has to cover.
+window.strings = () => {
+  COLLECT = [];
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  const out = [];
+  S.beats.forEach(b => {
+    if (b.say && HAS_LETTER.test(b.say)) out.push(b.say);
+    COLLECT = [];
+    if (b.draw) b.draw(1);
+    out.push(...COLLECT);
+  });
+  COLLECT = null;
+  return [...new Set(out)];
+};
 // Look at the finished board of every stretch between wipes, and say what is wrong with it. Runs once, after the video.
 window.lint = () => {
   const tall = H / W > 1.5, k = W / 720, tol = 8 * k;   // a phone-shaped board: the app covers its edges and foot

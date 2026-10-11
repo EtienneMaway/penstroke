@@ -25,7 +25,7 @@ Where penstroke is going. Ordered by how much each item improves the videos peop
 ## 4. Reach
 
 - [x] **Export presets** (`--preset tiktok|reels|shorts|square|instagram|linkedin|youtube`).
-- [ ] **Translate a finished video.** Reuse the same drawings with new narration in another language.
+- [x] **Translate a finished video** (`--strings`, `--lang es`; strings left out are reported).
 - [ ] **Web or desktop app.** A wrapper so non-developers can use it without a terminal.
 
 ## 5. Trust

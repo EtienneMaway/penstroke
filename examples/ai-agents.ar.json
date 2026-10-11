@@ -1,0 +1,15 @@
+{
+  "What is an AI agent?": "ما هو وكيل الذكاء الاصطناعي؟",
+  "It's software that uses a language model to think,": "هو برنامج يستخدم نموذجًا لغويًا ليفكر،",
+  "1. THINK": "1. يفكّر",
+  "language model": "نموذج لغوي",
+  "picks a tool, and acts.": "يختار أداة ثم يتصرف.",
+  "2. ACT": "2. يتصرف",
+  "uses a tool": "يستخدم أداة",
+  "Then it looks at the result,": "ثم ينظر إلى النتيجة،",
+  "3. OBSERVE": "3. يلاحظ",
+  "checks the result": "يتحقق من النتيجة",
+  "and repeats until the goal is done.": "ويكرر حتى يتحقق الهدف.",
+  "repeat until": "كرر حتى",
+  "goal done": "تحقق الهدف"
+}

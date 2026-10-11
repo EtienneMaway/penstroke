@@ -33,6 +33,27 @@ for (const f of fs.readdirSync(path.join(__dirname, 'lint')).filter(f => f.endsW
   if (!ok) console.log('     got: ' + (warns.join(' | ') || (r.stderr || '').trim().split('\n').slice(-2).join(' ') || 'no warnings'));
 }
 
+// Translation: --strings lists what must be translated, --lang renders the same drawings in another language from a JSON
+// map, and any string left out of the map is reported rather than silently shown in the wrong language.
+{
+  const render = args => spawnSync('node', [path.join(root, 'scripts/render.js'), ...args], { encoding: 'utf8' });
+  const scene = path.join(root, 'examples/ai-agents.js');
+  let keys = [];
+  try { keys = Object.keys(JSON.parse(render([scene, '--strings']).stdout)); } catch {}
+  const partial = path.join(out, 'partial.es.json');
+  fs.writeFileSync(partial, JSON.stringify({ 'What is an AI agent?': '¿Qué es un agente de IA?' }));
+  const full = render([scene, path.join(out, 'agents-es.mp4'), '--lang', 'es', '--preview']);
+  const part = render([scene, '--sheet', '--lang', 'es', '--translations', partial]);
+  const missing = render([scene, '--sheet', '--lang', 'zz']);
+  const checks = [
+    ['strings lists the scene', keys.includes('What is an AI agent?') && keys.includes('3. OBSERVE')],
+    ['full translation renders clean', full.status === 0 && !/^WARN/m.test(full.stdout)],
+    ['untranslated strings are reported', /^WARN no translation for: "3\. OBSERVE"/m.test(part.stdout)],
+    ['missing file is refused with the fix', missing.status !== 0 && /--strings/.test(missing.stderr)],
+  ];
+  for (const [name, ok] of checks) { if (!ok) bad++; console.log(`${ok ? 'ok  ' : 'FAIL'} i18n   ${name}`); }
+}
+
 // Export presets: a landscape scene must come out at each format's exact size.
 const { execFileSync } = require('child_process');
 for (const [preset, w, h] of [['tiktok', 540, 960], ['square', 540, 540], ['youtube', 960, 540]]) {

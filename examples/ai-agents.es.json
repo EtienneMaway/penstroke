@@ -1,0 +1,15 @@
+{
+  "What is an AI agent?": "¿Qué es un agente de IA?",
+  "It's software that uses a language model to think,": "Es un programa que usa un modelo de lenguaje para pensar,",
+  "1. THINK": "1. PENSAR",
+  "language model": "modelo de lenguaje",
+  "picks a tool, and acts.": "elige una herramienta y actúa.",
+  "2. ACT": "2. ACTUAR",
+  "uses a tool": "usa una herramienta",
+  "Then it looks at the result,": "Luego mira el resultado,",
+  "3. OBSERVE": "3. OBSERVAR",
+  "checks the result": "revisa el resultado",
+  "and repeats until the goal is done.": "y repite hasta lograr el objetivo.",
+  "repeat until": "repite hasta",
+  "goal done": "objetivo listo"
+}
