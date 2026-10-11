@@ -211,7 +211,7 @@ function paint(name, alpha) {   // fit the screenshot inside the board, letterbo
   const im = IMGS[name], k = Math.min(W / im.width, H / im.height);
   g.globalAlpha = alpha; g.drawImage(im, (W - im.width * k) / 2, (H - im.height * k) / 2, im.width * k, im.height * k); g.globalAlpha = 1;
 }
-window.sceneMeta = () => S && { voice: S.voice, lang: S.lang, kokoro: S.kokoro, rate: S.rate || 170, gap: S.gap, audio: S.audio, eleven: S.eleven, size: [W, H], bgs: [...new Set(S.beats.map(b => b.bg).filter(Boolean))], beats: S.beats.map(b => ({ say: b.say || '', dur: b.dur, at: b.at })) };
+window.sceneMeta = () => S && { voice: S.voice, lang: S.lang, kokoro: S.kokoro, rate: S.rate || 170, gap: S.gap, audio: S.audio, eleven: S.eleven, size: [W, H], bgs: [...new Set(S.beats.map(b => b.bg).filter(Boolean))], music: S.music, sfx: S.sfx, beats: S.beats.map(b => ({ say: b.say || '', dur: b.dur, at: b.at, wipe: !!(b.clear || b.bg) })) };
 window.setTimings = t => { T = t; };
 window.setScale = k => { SCALE = k; resize(); };   // preview renders at a fraction of the pixels
 window.setPad = p => { PAD = { l: 0, t: 0, r: 0, b: 0, ...p }; resize(); };
@@ -238,7 +238,7 @@ function caption(text) {
   lines.forEach((l, i) => g.fillText(l, W / 2, y + pad + size * 0.85 + i * lead));
   g.restore(); g.direction = 'ltr'; g.textAlign = 'left';
 }
-window.frame = t => {
+function draw(t) {
   pen = null; labels = [];
   let from = 0, theme = BASE;   // a beat with clear or bg wipes the ink, so start from the latest one already reached
   const bgs = [];
@@ -266,6 +266,8 @@ window.frame = t => {
     if (i >= 0) caption(S.beats[i].say);
   }
   if (pen) { g.fillStyle = PEN; g.shadowColor = PEN; g.shadowBlur = 12; g.beginPath(); g.arc(pen[0], pen[1], 5, 0, 7); g.fill(); g.shadowBlur = 0; }
-  return cv.toDataURL('image/jpeg', 0.95);
-};
+}
+window.frame = t => { draw(t); return cv.toDataURL('image/jpeg', 0.95); };
+// Is the pen mid-stroke at each step? Drawn without encoding a picture, so it is cheap; it times the scratch sound.
+window.penTrack = (total, step) => { const out = []; for (let t = 0; t < total; t += step) { draw(t); out.push(!!pen); } return out; };
 </script></body></html>

@@ -31,5 +31,15 @@ for (const [preset, w, h] of [['tiktok', 540, 960], ['square', 540, 540], ['yout
   if (!ok) bad++;
   console.log(`${ok ? 'ok  ' : 'FAIL'} preset ${preset.padEnd(8)} ${size || 'no video'}`);
 }
+// Sound extras: pen scratch + music must mix in without breaking the render, and the audio must be audible.
+{
+  const f = path.join(out, 'sound.mp4');
+  const r = spawnSync('node', [path.join(root, 'scripts/render.js'), path.join(root, 'examples/ai-agents.js'), f, '--sfx', '--music', '--preview'], { encoding: 'utf8' });
+  let audio = '';
+  try { audio = execFileSync('ffprobe', ['-v', 'error', '-select_streams', 'a', '-show_entries', 'stream=codec_type', '-of', 'csv=p=0', f], { encoding: 'utf8' }).trim(); } catch {}
+  const ok = r.status === 0 && audio.startsWith('audio');
+  if (!ok) bad++;
+  console.log(`${ok ? 'ok  ' : 'FAIL'} sound  sfx + music`);
+}
 console.log(bad ? `${bad} failed` : 'all passed');
 process.exit(bad ? 1 : 0);

@@ -12,7 +12,7 @@ const die = m => { console.error(m); process.exit(1); };
 const argv = process.argv.slice(2), pos = [], opt = {};
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
-  if (a === '--preview' || a === '--sheet' || a === '--no-captions') opt[a.slice(2)] = true;
+  if (a === '--preview' || a === '--sheet' || a === '--no-captions' || a === '--music' || a === '--sfx') opt[a.slice(2)] = true;
   else if (a === '--preset') opt.preset = argv[++i];
   else if (a === '--beats' || a === '--beat') opt.beats = argv[++i];
   else if (a.startsWith('--')) die(`unknown flag ${a}`);
@@ -216,14 +216,63 @@ function kokoroTakes(meta, dir) {
   const t1 = ranged ? Math.min(total, timings[last].start + timings[last].dur + 0.5) : total;
   const span = t1 - t0;
 
+  // Sound that is not speech: a pen scratch that follows the drawing, a swipe when the board is wiped, and a quiet music bed.
+  // Scene: `sfx: true`, `music: true` (a soft synthesised pad) or `music: 'bed.mp3'` (your own file, looped and ducked under
+  // the voice), each also `{ ..., volume }`. Flags --sfx and --music turn them on for any scene.
+  const extras = [];   // { file, kind, volume, loop }
+  const sfxOpt = meta.sfx === false ? null : (meta.sfx || opt.sfx) ? (typeof meta.sfx === 'object' ? meta.sfx : {}) : null;
+  const musicOpt = meta.music === false ? null : (meta.music || opt.music) ? (typeof meta.music === 'object' ? meta.music : typeof meta.music === 'string' ? { src: meta.music } : {}) : null;
+  if (!opt.sheet && (sfxOpt || musicOpt)) {
+    const fx = require('./sfx');
+    if (sfxOpt) {
+      const STEP = 0.04;
+      const track = await page.evaluate(([n, s]) => window.penTrack(n, s), [total, STEP]);
+      const wipes = timings.map((t, i) => (meta.beats[i].wipe && i > 0 ? t.start : -1)).filter(t => t >= 0);
+      const f = path.join(tmp, 'sfx.wav');
+      fx.writeWav(f, fx.mixTracks(fx.scratch(fx.runs(track, STEP), total), fx.swipes(wipes, total)));
+      extras.push({ file: f, kind: 'sfx', volume: sfxOpt.volume ?? 0.4 });
+    }
+    if (musicOpt) {
+      let f = musicOpt.src ? path.resolve(dir, musicOpt.src) : null;
+      if (f && !fs.existsSync(f)) die(`music file not found: ${musicOpt.src} (paths are relative to the scene file)`);
+      if (!f) { f = path.join(tmp, 'music.wav'); fx.writeWav(f, fx.pad(total)); }
+      extras.push({ file: f, kind: 'music', volume: musicOpt.volume ?? (musicOpt.src ? 0.25 : 0.5), loop: !!musicOpt.src });
+    }
+  }
+
   if (!opt.sheet) {
     const args = ['-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'mjpeg', '-i', '-'];
     clips.forEach(c => args.push('-i', c.f));
-    if (clips.length) {
+    // With sound extras but no speech at all, a silent input stands in for the voice so there is something to mix onto.
+    const silent = !clips.length && extras.length;
+    if (silent) args.push('-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo');
+    extras.forEach(e => { if (e.loop) args.push('-stream_loop', '-1'); args.push('-i', e.file); });
+    const nIn = n => 1 + clips.length + (silent ? 1 : 0) + n;   // input number of the n-th extra
+    const out_ = ranged ? 'full' : 'a';
+    if (clips.length || silent) {
       const delayed = clips.map((c, i) => `[${i + 1}:a]aresample=48000,adelay=${Math.round(c.at * 1000)}:all=1[a${i}]`).join(';');
-      const mix = clips.map((_, i) => `[a${i}]`).join('') + `amix=inputs=${clips.length}:normalize=0,apad[${ranged ? 'full' : 'a'}]`;
+      const voice = clips.length
+        ? `${delayed};${clips.map((_, i) => `[a${i}]`).join('')}amix=inputs=${clips.length}:normalize=0[vraw]`
+        : `[${1 + clips.length}:a]aresample=48000[vraw]`;
+      let graph;
+      if (!extras.length) graph = `${voice};[vraw]apad[${out_}]`;
+      else {
+        const st = 'aformat=channel_layouts=stereo';
+        const music = extras.findIndex(e => e.kind === 'music'), sfx = extras.findIndex(e => e.kind === 'sfx');
+        const parts = [voice, `[vraw]${st}${music >= 0 ? ',asplit=2[vd][vs]' : '[vd]'}`];
+        const labels = ['[vd]'];
+        if (music >= 0) {
+          const e = extras[music], fadeAt = Math.max(0, total - 1.5);
+          parts.push(`[${nIn(music)}:a]aresample=48000,${st},volume=${e.volume},afade=t=in:d=1,afade=t=out:st=${fadeAt.toFixed(2)}:d=1.5[m0]`);
+          parts.push('[m0][vs]sidechaincompress=threshold=0.04:ratio=10:attack=30:release=600[md]');   // the music ducks while someone speaks
+          labels.push('[md]');
+        }
+        if (sfx >= 0) { parts.push(`[${nIn(sfx)}:a]aresample=48000,${st},volume=${extras[sfx].volume}[sx]`); labels.push('[sx]'); }
+        parts.push(`${labels.join('')}amix=inputs=${labels.length}:normalize=0:duration=longest,apad[${out_}]`);
+        graph = parts.join(';');
+      }
       const cut = ranged ? `;[full]atrim=start=${t0.toFixed(3)}:end=${t1.toFixed(3)},asetpts=PTS-STARTPTS[a]` : '';
-      args.push('-filter_complex', `${delayed};${mix}${cut}`, '-map', '0:v', '-map', '[a]', '-c:a', 'aac', '-b:a', '160k', '-ac', '2');
+      args.push('-filter_complex', graph + cut, '-map', '0:v', '-map', '[a]', '-c:a', 'aac', '-b:a', '160k', '-ac', '2');
     }
     if (outSize) args.push('-vf', `scale=${outSize[0]}:${outSize[1]}`);
     args.push('-t', span.toFixed(3), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', PREVIEW ? '30' : '18', '-movflags', '+faststart', out);

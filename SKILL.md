@@ -107,6 +107,22 @@ See `examples/arabic.js` (an Arabic lesson) and `examples/languages.js` (one wor
 
 `node tests/run.js` renders every example and the same short scene in fifteen languages (`tests/languages/`), and fails on any warning. `node tests/fonts.js` prints which face each script gets on this machine: a Mac face, a Noto face, or none.
 
+## Sound: pen scratch, music, swipes
+
+Off by default, because a lesson often goes under someone else's music. Switch on per scene or per render:
+
+```js
+scene({ sfx: true, music: true, beats: [...] })
+scene({ sfx: { volume: 0.5 }, music: { src: 'bed.mp3', volume: 0.2 }, beats: [...] })
+```
+
+or `node render.js scene.js out.mp4 --sfx --music` for any scene without editing it.
+
+- **`sfx`**: a pen scratch that runs exactly while the pen is mid-stroke, and a short swipe where the board is wiped (`clear` or a new `bg`). Synthesised, nothing to license.
+- **`music: true`**: a soft four-chord pad, synthesised and quiet. **`music: 'file.mp3'`**: your own track, relative to the scene file, looped, faded in and out, and ducked under the voice so speech stays clear. Use music you have the right to use.
+- Default levels are `sfx` 0.4 and `music` 0.5 (0.25 for a file), as a fraction of full volume under the voice. Real-audio clips take both too, but use a low `music` level there.
+- Works with `--preset` and `--beats`. The sound is not in the `--sheet` output.
+
 ## Export presets
 
 `node render.js scene.js out.mp4 --preset tiktok` sets the video size for where it will be posted:

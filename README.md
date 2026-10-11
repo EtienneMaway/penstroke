@@ -101,6 +101,15 @@ node scripts/render.js scene.js out.mp4 --beats 4-6     # only those beats, with
 
 Then render the full video once the sheet is clean.
 
+## Sound
+
+```sh
+node scripts/render.js scene.js out.mp4 --sfx           # pen scratch while it draws, swipe when the board clears
+node scripts/render.js scene.js out.mp4 --music         # a soft pad under the voice
+```
+
+Or `sfx: true` and `music: true` on a scene. `music: 'bed.mp3'` uses your own track, looped and ducked under the voice. All the built-in sound is synthesised locally, so there is nothing to license.
+
 ## Export for where it will be posted
 
 ```sh
@@ -147,6 +156,7 @@ penstroke is a fork of [**khan-explainer**](https://github.com/haiderfarooq3/kha
 - A library of 24 hand-drawn icons (`icon()`)
 - Fast iteration: `--sheet`, `--preview` and `--beats`
 - Export presets for TikTok, Reels, Shorts, Instagram, LinkedIn and YouTube
+- Sound: a pen scratch that follows the drawing, a swipe on wipes, and a quiet music bed that ducks under the voice
 - A vertical-native example, an I/O systems lesson, a README gallery and `scripts/gif.js`
 - See [ROADMAP.md](ROADMAP.md) for what is next
 
