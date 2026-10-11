@@ -229,14 +229,15 @@ function kokoroTakes(meta, dir) {
       const track = await page.evaluate(([n, s]) => window.penTrack(n, s), [total, STEP]);
       const wipes = timings.map((t, i) => (meta.beats[i].wipe && i > 0 ? t.start : -1)).filter(t => t >= 0);
       const f = path.join(tmp, 'sfx.wav');
-      fx.writeWav(f, fx.mixTracks(fx.scratch(fx.runs(track, STEP), total), fx.swipes(wipes, total)));
-      extras.push({ file: f, kind: 'sfx', volume: sfxOpt.volume ?? 0.4 });
+      // Levels are absolute (RMS, full scale = 1): scratch about -41 dB and swipes about -37 dB, far under speech at about -22 dB.
+      fx.writeWav(f, fx.mixTracks(fx.level(fx.scratch(fx.runs(track, STEP), total), 0.009), fx.level(fx.swipes(wipes, total), 0.014)));
+      extras.push({ file: f, kind: 'sfx', volume: sfxOpt.volume ?? 1 });
     }
     if (musicOpt) {
       let f = musicOpt.src ? path.resolve(dir, musicOpt.src) : null;
       if (f && !fs.existsSync(f)) die(`music file not found: ${musicOpt.src} (paths are relative to the scene file)`);
-      if (!f) { f = path.join(tmp, 'music.wav'); fx.writeWav(f, fx.pad(total)); }
-      extras.push({ file: f, kind: 'music', volume: musicOpt.volume ?? (musicOpt.src ? 0.25 : 0.5), loop: !!musicOpt.src });
+      if (!f) { f = path.join(tmp, 'music.wav'); fx.writeWav(f, fx.level(fx.pad(total), 0.012)); }   // about -38 dB: a bed you notice mostly when it stops
+      extras.push({ file: f, kind: 'music', volume: musicOpt.volume ?? (musicOpt.src ? 0.12 : 1), loop: !!musicOpt.src });
     }
   }
 
@@ -264,7 +265,7 @@ function kokoroTakes(meta, dir) {
         if (music >= 0) {
           const e = extras[music], fadeAt = Math.max(0, total - 1.5);
           parts.push(`[${nIn(music)}:a]aresample=48000,${st},volume=${e.volume},afade=t=in:d=1,afade=t=out:st=${fadeAt.toFixed(2)}:d=1.5[m0]`);
-          parts.push('[m0][vs]sidechaincompress=threshold=0.04:ratio=10:attack=30:release=600[md]');   // the music ducks while someone speaks
+          parts.push('[m0][vs]sidechaincompress=threshold=0.02:ratio=14:attack=20:release=700[md]');   // the music ducks while someone speaks
           labels.push('[md]');
         }
         if (sfx >= 0) { parts.push(`[${nIn(sfx)}:a]aresample=48000,${st},volume=${extras[sfx].volume}[sx]`); labels.push('[sx]'); }

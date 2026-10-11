@@ -35,18 +35,19 @@ function runs(track, step, gap = 0.12, min = 0.08) {
 
 // Pen on a board: band-limited noise, rubbed back and forth, with a short fade at each end of a stroke.
 function scratch(intervals, total) {
-  const out = new Float32Array(Math.ceil(total * SR)), noise = rng(7);
-  let lp1 = 0, lp2 = 0;
+  const out = new Float32Array(Math.ceil(total * SR)), noise = rng(7), grain = rng(99);
+  let lp1 = 0, lp2 = 0, g = 0;
   for (const [a, b] of intervals) {
     const i0 = Math.floor(a * SR), i1 = Math.min(out.length, Math.ceil(b * SR));
     for (let i = i0; i < i1; i++) {
       const t = i / SR, into = t - a, left = b - t;
-      const env = Math.min(1, into / 0.03, left / 0.07);
-      const rub = 0.45 + 0.55 * Math.pow(Math.sin(Math.PI * (5 + 2.5 * Math.sin(t * 4.1)) * t), 2);   // back-and-forth strokes
+      const env = Math.min(1, into / 0.05, left / 0.12);
+      const rub = 0.25 + 0.75 * Math.pow(Math.sin(Math.PI * (3.2 + 1.2 * Math.sin(t * 2.3)) * t), 2);   // slower back-and-forth, with real gaps
+      g += 0.002 * (Math.abs(grain()) - g);                                                              // uneven grain: chalk skips and catches
       const n = noise();
-      lp1 += 0.55 * (n - lp1);                 // roll off the hiss...
-      lp2 += 0.04 * (lp1 - lp2);               // ...and take out the low rumble
-      out[i] = (lp1 - lp2) * env * rub * 0.9;
+      lp1 += 0.3 * (n - lp1);                  // softer top: no hiss
+      lp2 += 0.05 * (lp1 - lp2);               // no low rumble
+      out[i] = (lp1 - lp2) * env * rub * (0.4 + 6 * g);
     }
   }
   return out;
@@ -67,10 +68,11 @@ function swipes(times, total) {
   return out;
 }
 
-// Soft pad: four slow chords, each note a sine with a quiet octave above, crossfaded. Quiet by design: it sits under a voice.
-const CHORDS = [[130.81, 196.0, 329.63, 493.88], [110.0, 164.81, 392.0, 523.25], [87.31, 130.81, 220.0, 329.63], [98.0, 146.83, 246.94, 329.63]];
+// Soft pad: slow chords, each note two sines a few cents apart (a chorus, so it is not a bare synth tone), low register,
+// slow crossfades, no vibrato. It is meant to sit far under a voice; for anything better, bring your own track.
+const CHORDS = [[130.81, 164.81, 196.0, 246.94], [110.0, 130.81, 164.81, 196.0], [87.31, 130.81, 174.61, 220.0], [98.0, 146.83, 196.0, 246.94]];
 function pad(total) {
-  const out = new Float32Array(Math.ceil(total * SR)), span = 6, fade = 2;
+  const out = new Float32Array(Math.ceil(total * SR)), span = 8, fade = 3;
   const chords = Math.ceil(total / span) + 1;
   for (let c = 0; c < chords; c++) {
     const notes = CHORDS[c % CHORDS.length], start = c * span - fade / 2;
@@ -80,19 +82,24 @@ function pad(total) {
       const env = Math.min(1, u / fade, (span + fade - u) / fade);
       const e = env * env * (3 - 2 * env);   // smoothstep
       let s = 0;
-      notes.forEach((f, k) => {
-        const v = 1 + 0.0035 * Math.sin(2 * Math.PI * (0.3 + k * 0.07) * t);   // slow vibrato keeps it from sounding static
-        s += Math.sin(2 * Math.PI * f * v * t) + 0.25 * Math.sin(2 * Math.PI * f * 2 * v * t);
-      });
-      out[i] += s / notes.length * e * (0.8 + 0.2 * Math.sin(2 * Math.PI * 0.11 * t));
+      for (const f of notes) s += Math.sin(2 * Math.PI * f * 0.9965 * t) + Math.sin(2 * Math.PI * f * 1.0035 * t);
+      out[i] += s / (notes.length * 2) * e;
     }
   }
-  let peak = 0;
-  for (const v of out) peak = Math.max(peak, Math.abs(v));
-  if (peak) for (let i = 0; i < out.length; i++) out[i] *= 0.7 / peak;
   return out;
+}
+
+// Scale a track so its audible part sits at a known level (RMS, 1.0 = full scale). Levels are then predictable
+// next to speech, whatever the synthesis does: -40 dB is a bed you only notice when it stops.
+function level(track, rms) {
+  let sum = 0, n = 0;
+  for (const v of track) if (Math.abs(v) > 1e-4) { sum += v * v; n++; }
+  if (!n) return track;
+  const k = rms / Math.sqrt(sum / n);
+  for (let i = 0; i < track.length; i++) track[i] *= k;
+  return track;
 }
 
 const mixTracks = (a, b) => { const o = new Float32Array(Math.max(a.length, b.length)); a.forEach((v, i) => { o[i] += v; }); b.forEach((v, i) => { o[i] += v; }); return o; };
 
-module.exports = { SR, writeWav, runs, scratch, swipes, pad, mixTracks };
+module.exports = { SR, writeWav, runs, scratch, swipes, pad, level, mixTracks };

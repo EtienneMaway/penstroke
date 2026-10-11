@@ -120,7 +120,7 @@ or `node render.js scene.js out.mp4 --sfx --music` for any scene without editing
 
 - **`sfx`**: a pen scratch that runs exactly while the pen is mid-stroke, and a short swipe where the board is wiped (`clear` or a new `bg`). Synthesised, nothing to license.
 - **`music: true`**: a soft four-chord pad, synthesised and quiet. **`music: 'file.mp3'`**: your own track, relative to the scene file, looped, faded in and out, and ducked under the voice so speech stays clear. Use music you have the right to use.
-- Default levels are `sfx` 0.4 and `music` 0.5 (0.25 for a file), as a fraction of full volume under the voice. Real-audio clips take both too, but use a low `music` level there.
+- Default levels are deliberately low and absolute: the scratch sits about 15 dB under speech and the synthesised pad about 18 dB under it, then ducks further while someone talks. `volume` multiplies that: `1.5` is about 3.5 dB louder, `2` about 6 dB, `0.5` quieter. A file given as `music: 'bed.mp3'` defaults to `volume: 0.12` of its own level. Real-audio clips take both too, but keep `music` low there.
 - Works with `--preset` and `--beats`. The sound is not in the `--sheet` output.
 
 ## Export presets
