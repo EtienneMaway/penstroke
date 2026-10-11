@@ -87,16 +87,21 @@ function stroke(pts, p = 1, o = {}) {
   g.stroke();
   if (p < 1) pen = pts[n - 1];
 }
+// The face a string is written in. Urdu shares Arabic's letters but is written in nastaliq: `lang: 'ur'` on the call or the
+// scene says so when no Urdu-only letter does. A Latin label that quotes a foreign word keeps its own hand.
+function fontSpec(str, size, o = {}) {
+  const sc = SCRIPTS.find(k => k.re.test(str)), shaped = !!sc, first = (str.match(LETTER) || [''])[0];
+  const rtl = shaped && RTL.test(first);   // the first letter sets the direction
+  const face = sc?.arabic && (o.lang || S?.lang) === 'ur' ? URDU : sc?.face;
+  const latin = !rtl && /\p{Script=Latin}/u.test(first);
+  const font = !shaped ? `bold ${size}px ${FONT}` : latin ? `bold ${size}px ${FONT},${face}` : `${sc.bold ? 'bold ' : ''}${size}px ${face},${FONT}`;
+  return { shaped, rtl, font };
+}
 function write(str, x, y, p = 1, o = {}) {
   if (p <= 0) return;
   inkN++;
-  const size = o.size || 36, sc = SCRIPTS.find(k => k.re.test(str)), shaped = !!sc;
-  const rtl = shaped && RTL.test((str.match(LETTER) || [''])[0]);   // the first letter sets the direction
-  // Urdu shares Arabic's letters but is written in nastaliq. `lang: 'ur'` on the call or the scene says so when no Urdu-only letter does.
-  const face = sc?.arabic && (o.lang || S?.lang) === 'ur' ? URDU : sc?.face;
-  // A Latin label that quotes a foreign word keeps its own hand, and the foreign word falls back to its script's face.
-  const latin = !rtl && /\p{Script=Latin}/u.test((str.match(LETTER) || [''])[0]);
-  g.font = !shaped ? `bold ${size}px ${FONT}` : latin ? `bold ${size}px ${FONT},${face}` : `${sc.bold ? 'bold ' : ''}${size}px ${face},${FONT}`;
+  const size = o.size || 36, { shaped, rtl, font } = fontSpec(str, size, o);
+  g.font = font;
   g.fillStyle = o.color || C.white; g.textAlign = 'left';
   if (shaped) g.direction = rtl ? 'rtl' : 'ltr';
   const m = g.measureText(str), full = m.width, lx = o.center ? x - full / 2 : rtl ? x - full : x;   // x is where the pen starts: the right end of right-to-left text
@@ -136,6 +141,88 @@ function check(x, y, p = 1, o = {}) {   // glyphs like a tick are missing from t
   stroke(curve([x, y + s * 0.55], mid, null, 8).concat(curve(mid, [x + s, y], null, 14)), p, { color: C.green, width: 6, ...o });
 }
 
+
+// ---- layout: nobody should work out pixels. cells() spreads rectangles over the board, node() draws a labelled thing in
+// one, connect() joins two things edge to edge so an arrow never runs through a label, fit() sizes a label to its room.
+const textW = (str, size, o) => { g.font = fontSpec(str, size, o).font; return g.measureText(str).width; };
+// The largest size up to `size` at which `str` is no wider than `maxW`. Never below 22: past that, shorten the words.
+function fit(str, maxW, size = 40, o = {}) {
+  let s = size;
+  while (s > 22 && textW(str, s, o) > maxW) s -= 2;
+  return s;
+}
+// The part of the board below the title and clear of the phone UI on a tall board: where the picture goes.
+function body() {
+  const k = W / 720;
+  return W < H ? { x: 50 * k, y: 170 * k, w: W - 100 * k, h: H - 170 * k - 290 * k } : { x: 60, y: 130, w: W - 120, h: H - 130 - 60 };
+}
+const asRect = a => Array.isArray(a) ? { x: a[0], y: a[1], w: a[2], h: a[3] } : a;
+const withCentre = r => ({ ...r, cx: r.x + r.w / 2, cy: r.y + r.h / 2 });
+// cells(cols, rows, { area, w, h }): rectangles in reading order, spread evenly across the area. `w` and `h` cap a cell's size,
+// so two things in a wide area stay a sensible size instead of stretching; the rest becomes even space between them.
+function cells(cols, rows = 1, o = {}) {
+  const a = asRect(o.area || body()), cw = Math.min(o.w ?? 280, a.w / cols * 0.78), ch = Math.min(o.h ?? 190, a.h / rows * 0.78);   // never wider than 78% of the room: the rest is air between things
+  const gx = (a.w - cw * cols) / (cols + 1), gy = (a.h - ch * rows) / (rows + 1), out = [];
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) out.push(withCentre({ x: a.x + gx * (c + 1) + cw * c, y: a.y + gy * (r + 1) + ch * r, w: cw, h: ch }));
+  return out;
+}
+const row = (n, o) => cells(n, 1, o);
+const col = (n, o) => cells(1, n, o);
+const grid = (c, r, o) => cells(c, r, o);
+
+// What a node looks like inside a cell: { label, sub, color, icon, shape: 'oval' | 'box', size }. inkOf() is the box its ink
+// fills, so connect() can start an arrow at the picture's edge rather than the cell's.
+function nodeLayout(r, o = {}) {
+  const shape = o.icon ? 'icon' : (o.shape || 'oval'), inner = shape === 'oval' ? 0.72 : 0.9;
+  const label = o.label ? fit(o.label, r.w * inner, o.size || 42) : 0, subSize = o.sub ? fit(o.sub, r.w * inner, Math.min(30, Math.round(label * 0.7) || 30)) : 0;
+  if (shape === 'icon') {
+    const isz = Math.max(50, Math.min(r.w * 0.8, r.h - (label ? label + 24 : 0) - (subSize ? subSize + 14 : 0), 140));
+    const used = isz + (label ? label + 18 : 0) + (subSize ? subSize + 12 : 0), top = r.cy - used / 2;
+    return { shape, label, subSize, isz, ink: { x: r.cx - Math.max(isz, 0) / 2, y: top, w: isz, h: used }, iconY: top + isz / 2, labelY: top + isz + label * 0.95 + 8, subY: top + isz + label + subSize * 0.9 + 22 };
+  }
+  const h = Math.min(r.h, (label + subSize) * 1.5 + 50);
+  const ink = { x: r.x, y: r.cy - h / 2, w: r.w, h };
+  return { shape, label, subSize, ink, labelY: r.cy + (subSize ? -subSize * 0.15 : label * 0.3), subY: r.cy + label * 0.55 + subSize * 0.5 };
+}
+const inkOf = (r, o) => withCentre(nodeLayout(r, o).ink);
+function node(r, p = 1, o = {}) {
+  const L = nodeLayout(r, o), color = o.color || C.white;
+  if (L.shape === 'icon') {
+    icon(o.icon, r.cx, L.iconY, seg(p, 0, .5), { size: L.isz, color });
+    if (o.label) write(o.label, r.cx, L.labelY, seg(p, .5, .85), { size: L.label, color, center: true });
+    if (o.sub) write(o.sub, r.cx, L.subY, seg(p, .85, 1), { size: L.subSize, center: true });
+  } else {
+    const i = L.ink;
+    stroke(L.shape === 'box' ? box(i.x, i.y, i.w, i.h) : oval(r.cx, r.cy, i.w / 2, i.h / 2), seg(p, 0, .45), { color });
+    if (o.label) write(o.label, r.cx, L.labelY, seg(p, .45, o.sub ? .75 : 1), { size: L.label, color, center: true });
+    if (o.sub) write(o.sub, r.cx, L.subY, seg(p, .75, 1), { size: L.subSize, center: true });
+  }
+  return withCentre(L.ink);
+}
+// connect(a, b, p, { color, gap, bend, around }): an arrow from the facing edge of a to the facing edge of b. Pass what node()
+// returns or inkOf(). `bend` bows it sideways by that many units. `around: 'below'` (or 'above') leaves from the bottom (top) of
+// a and arrives at the bottom (top) of b, swinging out by `depth` (default 110): the way back past anything in between.
+function connect(a, b, p = 1, o = {}) {
+  a = withCentre(asRect(a)); b = withCentre(asRect(b));
+  const gap = o.gap ?? 10, dx = b.cx - a.cx, dy = b.cy - a.cy;
+  if (o.around) {
+    const s = o.around === 'above' ? -1 : 1, d = o.depth ?? 110;
+    const f = [a.cx, s > 0 ? a.y + a.h + gap : a.y - gap], t = [b.cx, s > 0 ? b.y + b.h + gap : b.y - gap];
+    return arrow(f, t, p, { color: o.color, ctrl: [(f[0] + t[0]) / 2, Math.max(f[1], t[1]) * (s > 0 ? 1 : 0) + Math.min(f[1], t[1]) * (s > 0 ? 0 : 1) + s * 2 * d] });
+  }
+  const horiz = Math.abs(dx) / ((a.w + b.w) / 2) >= Math.abs(dy) / ((a.h + b.h) / 2);
+  let from, to;
+  if (horiz) { const s = Math.sign(dx) || 1; from = [a.cx + s * (a.w / 2 + gap), a.cy]; to = [b.cx - s * (b.w / 2 + gap), b.cy]; }
+  else { const s = Math.sign(dy) || 1; from = [a.cx, a.cy + s * (a.h / 2 + gap)]; to = [b.cx, b.cy - s * (b.h / 2 + gap)]; }
+  const bend = o.bend || 0, mx = (from[0] + to[0]) / 2, my = (from[1] + to[1]) / 2, len = Math.hypot(to[0] - from[0], to[1] - from[1]) || 1;
+  arrow(from, to, p, { color: o.color, ctrl: bend ? [mx - (to[1] - from[1]) / len * bend, my + (to[0] - from[0]) / len * bend] : undefined });
+}
+// title(str, p, color): the heading at the top left, with its underline sized to the words.
+function title(str, p = 1, color) {
+  const k = W < H ? W / 720 : 1, size = fit(str, W - 120 * k, 56 * k, {}), w = textW(str, size), y = (W < H ? 190 : 85) * k;
+  write(str, 60 * k, y, seg(p, 0, .8), { size, color: color || C.yellow });
+  stroke(curve([58 * k, y + 20], [60 * k + w, y + 18], [60 * k + w / 2, y + 28]), seg(p, .8, 1), { color: color || C.yellow, width: 4 });
+}
 
 // ---- icons: small hand-drawn pictures built from the same wobbly strokes as everything else.
 // icon(name, cx, cy, p, {size, color, width}) draws one centred on (cx, cy), stroke by stroke as p runs 0..1.

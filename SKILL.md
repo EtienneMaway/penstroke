@@ -82,6 +82,27 @@ Every draw call is `(geometry, p, style)`. Points are `[x, y]` in board units.
 
 Text width is about `0.45 × size` per character for a normal label and `0.63 × size` per capital. Work it out before placing a label beside anything.
 
+## Layout helpers: no pixel arithmetic
+
+For diagrams of labelled things in a row, a column or a grid, let the board place them. Everything below is optional; `write`, `stroke` and the rest still work as before.
+
+| Call | Does |
+|---|---|
+| `row(n)` `col(n)` `grid(cols, rows)` | `n` rectangles `{x, y, w, h, cx, cy}` spread evenly over the picture area (below the title, clear of phone UI on a tall board). `{ area: [x, y, w, h], w, h }` overrides. A cell never takes more than about 78% of its room: the rest is air. |
+| `node(cell, p, { label, sub, icon, shape, color, size })` | A shape (`'oval'` by default, `'box'`, or an `icon` name) with its label and sub-label, drawn in order as `p` runs. Text shrinks to fit. Returns the box its ink fills. |
+| `inkOf(cell, opts)` | The same box, without drawing: for aiming a `connect` at a node drawn in an earlier beat. |
+| `connect(a, b, p, { color, bend, around })` | An arrow from the facing edge of `a` to the facing edge of `b`. `around: 'below'` (or `'above'`, with `depth`) swings it out past anything in between. |
+| `title(str, p, color)` | The heading with an underline sized to the words (top left, phone-safe on a tall board). |
+| `fit(str, maxW, size)` `textW(str, size)` | The largest size that fits a width, and the width of a string. |
+
+```js
+const [think, act, observe] = row(3);
+node(think, p, { label: '1. THINK', sub: 'language model', color: C.blue });
+connect(inkOf(think, { label: '1. THINK', sub: 'language model' }), inkOf(act, { label: '2. ACT' }), seg(p, 0, .35));
+```
+
+Pass the same options to `inkOf` as to `node` (label, sub, icon, shape) or the arrow aims at a different size of shape. Every node shrinks its own text, so give a row the same `size` if its labels should match. See `examples/auto-layout.js`; the same lesson in `examples/ai-agents.js` shows the by-hand way, which is still the right choice for freeform pictures.
+
 ## Camera
 
 A beat's `cam` moves the view over the board, so one wide diagram can be read in small parts.
