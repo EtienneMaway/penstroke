@@ -25,7 +25,7 @@ Based on khan-explainer by Haider Farooq ([github.com/haiderfarooq3/khan-explain
 3. **Write `scene.js`** in a scratch folder. Copy `examples/ai-agents.js` for a lesson or `examples/ui-tutorial.js` for a tutorial.
 4. **Render:** `node ~/.claude/skills/penstroke/scripts/render.js scene.js out.mp4`
 4b. **While laying out, use the fast modes** instead of full renders: `node render.js scene.js --sheet` writes only the contact sheet and warnings (about a second, no video). `--preview` renders a small 12 fps video, using the built-in voice if the Kokoro takes are not cached yet. `--beats 4-6` renders just those beats with their audio. Render the full video once the sheet is clean.
-5. **Read the `sheet` image it prints.** It shows the board at the end of every beat. The same folder holds every beat full-size as `b000.jpg`, `b001.jpg` and so on. Open those to check that a ring really sits on a small button. Fix every `WARN` (text off the board, or one label on another), overlap and spill, then re-render. A render takes seconds, so iterate.
+5. **Read the `sheet` image it prints.** It shows the board at the end of every beat. The same folder holds every beat full-size as `b000.jpg`, `b001.jpg` and so on. Open those to check that a ring really sits on a small button. Fix every `WARN`, then re-render. The renderer checks the finished board for: text off the board or too small (under size 20), one label on another, an arrow cutting through a label or an icon, a beat that draws nothing, and on a phone-shaped board, ink in the area the app covers (outside x 50..670, y 150..1010 at 720x1280). These checks run in `--sheet` too. A render takes seconds, so iterate.
 6. Deliver the MP4 and say which voice it used.
 
 Each output line is `beat N  start  +duration`. The sheet path is new on every render.
@@ -261,7 +261,7 @@ For many clips, finish one as the worked example, write the rules above into a b
 | Arabic or Hebrew placed by its left edge | For right-to-left text `x` is the right end. Use `center: true` to place it by its middle. |
 | Urdu written in naskh | Add `lang: 'ur'` to the scene. Without an Urdu-only letter the text looks Arabic. |
 | A sentence in another language read by the English voice | Set `lang` on the scene so the matching voice reads it. |
-| Skipping the sheet | Coordinates are written blind. The sheet is the only check. |
+| Skipping the sheet | Coordinates are written blind. The sheet and the `WARN` lines are the only check. |
 | A real-audio beat timed by ear or by sentence length | Read `at` from `words.txt`. A guess drifts and the pen runs ahead of the voice. |
 
 ## Limits

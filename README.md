@@ -85,6 +85,8 @@ node scripts/render.js examples/ai-agents-vertical.js short.mp4 --preset tiktok 
 node scripts/render.js examples/io-devices.js io.mp4                      # a lesson that uses them
 ```
 
+Each render also lints the finished board and prints a `WARN` for anything that makes a bad video: text off the board or too small, a label on another label, an arrow through a label or an icon, a beat that draws nothing, and ink in the phone-UI zone of a vertical board. `node tests/run.js` fails on any of them, and `tests/lint/` proves each one fires.
+
 Each render also prints the path of a contact sheet: the board at the end of every beat, in one image. That sheet is how Claude checks its own layout before it shows you anything.
 
 [SKILL.md](SKILL.md) is the full reference: the scene API, layout rules, the capture recipe for tutorials and the clip pipeline.

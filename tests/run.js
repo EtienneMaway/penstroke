@@ -20,6 +20,19 @@ for (const f of scenes) {
   console.log(`${verdict.padEnd(4)} ${name.padEnd(12)} ${(log.match(/^ok .* ([\d.]+s)$/m) || [])[1] || ''}`);
   if (verdict !== 'ok') console.log('     ' + (warns.join('\n     ') || log.trim().split('\n').slice(-8).join('\n     ')));
 }
+// Output checks: each scene in tests/lint declares what the renderer must say about it on its first line
+// (`// expect: some words from the warning`, or `// expect: none`). Every warning has to fire when it should, and a
+// clean scene has to stay quiet.
+for (const f of fs.readdirSync(path.join(__dirname, 'lint')).filter(f => f.endsWith('.js')).sort()) {
+  const file = path.join(__dirname, 'lint', f), want = (fs.readFileSync(file, 'utf8').match(/^\/\/ expect: (.+)$/m) || [])[1];
+  const r = spawnSync('node', [path.join(root, 'scripts/render.js'), file, '--sheet'], { encoding: 'utf8' });
+  const warns = (r.stdout || '').split('\n').filter(l => l.startsWith('WARN'));
+  const ok = r.status === 0 && (want === 'none' ? !warns.length : warns.some(w => w.includes(want)));
+  if (!ok) bad++;
+  console.log(`${ok ? 'ok  ' : 'FAIL'} lint   ${f.replace('.js', '').padEnd(20)} ${want === 'none' ? 'stays quiet' : `warns: ${want}`}`);
+  if (!ok) console.log('     got: ' + (warns.join(' | ') || (r.stderr || '').trim().split('\n').slice(-2).join(' ') || 'no warnings'));
+}
+
 // Export presets: a landscape scene must come out at each format's exact size.
 const { execFileSync } = require('child_process');
 for (const [preset, w, h] of [['tiktok', 540, 960], ['square', 540, 540], ['youtube', 960, 540]]) {

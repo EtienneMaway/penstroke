@@ -300,6 +300,7 @@ function kokoroTakes(meta, dir) {
   const cols = tall ? 6 : 3;   // a vertical board tiles six across so the sheet stays readable
   execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', '1', '-i', path.join(tmp, 'b%03d.jpg'),
     '-vf', `scale=${cols === 3 ? 640 : 300}:-1,tile=${cols}x${Math.ceil((last - first + 1) / cols)}`, '-frames:v', '1', sheet]);
+  await page.evaluate(() => window.lint());
   const warns = await page.evaluate(() => window.warnings());
   await browser.close();
 

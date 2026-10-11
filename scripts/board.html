@@ -44,6 +44,7 @@ let S = null, T = [], W = 1280, H = 720, pen = null;
 const IMGS = {}, FADE = 0.3;   // screenshot backgrounds, and their cross-fade in seconds
 const warns = new Set();
 let labels = [];   // text boxes drawn this frame, to catch one label landing on another
+let inkN = 0, arrowsList = [], boxes = [];   // ink calls so far, arrow paths and stroke bounds: for lint()
 
 // ---- shapes: each returns [x, y] points for stroke(). Wobble is sin-based, never
 // Math.random, because every frame has to redraw the identical line.
@@ -77,6 +78,8 @@ const view = (cw, top = 0) => ({ p: (x, y) => [x * W / cw, (y - top) * W / cw],
 // ---- drawing: (geometry..., p, style). p is 0..1; nothing is drawn at 0.
 function stroke(pts, p = 1, o = {}) {
   if (p <= 0) return;
+  inkN++;
+  { let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; for (const q of pts) { x0 = Math.min(x0, q[0]); y0 = Math.min(y0, q[1]); x1 = Math.max(x1, q[0]); y1 = Math.max(y1, q[1]); } boxes.push({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 }); }
   const n = Math.max(2, Math.ceil(pts.length * p));
   g.strokeStyle = o.color || C.white; g.lineWidth = o.width || 5; g.lineCap = g.lineJoin = 'round';
   g.beginPath(); g.moveTo(...pts[0]);
@@ -86,6 +89,7 @@ function stroke(pts, p = 1, o = {}) {
 }
 function write(str, x, y, p = 1, o = {}) {
   if (p <= 0) return;
+  inkN++;
   const size = o.size || 36, sc = SCRIPTS.find(k => k.re.test(str)), shaped = !!sc;
   const rtl = shaped && RTL.test((str.match(LETTER) || [''])[0]);   // the first letter sets the direction
   // Urdu shares Arabic's letters but is written in nastaliq. `lang: 'ur'` on the call or the scene says so when no Urdu-only letter does.
@@ -101,6 +105,7 @@ function write(str, x, y, p = 1, o = {}) {
   const ink0 = shaped ? lx - m.actualBoundingBoxLeft : lx, ink1 = shaped ? lx + m.actualBoundingBoxRight : lx + full;
   const top = shaped ? y - Math.max(size * 0.8, m.actualBoundingBoxAscent) : y - size * 0.8, bot = shaped ? y + m.actualBoundingBoxDescent : y + size * 0.2;
   if (ink0 < 0 || ink1 > W || (shaped ? top : y - size) < 0 || (shaped ? bot : y) > H) warns.add(`text runs off the board: "${str}"`);
+  if (size < 20) warns.add(`text is too small to read on a phone (size ${size}): "${str}"`);
   labels.push({ str, x: ink0, y: top, w: ink1 - ink0, h: bot - top });
   if (!shaped) {
     const sub = str.slice(0, Math.ceil(str.length * p));
@@ -120,6 +125,7 @@ function write(str, x, y, p = 1, o = {}) {
 }
 function arrow(a, b, p = 1, o = {}) {
   const pts = curve(a, b, o.ctrl);
+  if (p > 0) arrowsList.push(pts);
   stroke(pts, p, o);
   if (p < 1) return;
   const e = pts[40], q = pts[36], ang = Math.atan2(e[1] - q[1], e[0] - q[0]);
@@ -216,6 +222,33 @@ window.setTimings = t => { T = t; };
 window.setScale = k => { SCALE = k; resize(); };   // preview renders at a fraction of the pixels
 window.setPad = p => { PAD = { l: 0, t: 0, r: 0, b: 0, ...p }; resize(); };
 window.warnings = () => [...warns];
+// Look at the finished board of every stretch between wipes, and say what is wrong with it. Runs once, after the video.
+window.lint = () => {
+  const tall = H / W > 1.5, k = W / 720, tol = 8 * k;   // a phone-shaped board: the app covers its edges and foot
+  const check = () => {
+    for (const pts of arrowsList) for (const l of labels) {
+      const r = { x: l.x + 5, y: l.y + 5, w: l.w - 10, h: l.h - 10 };
+      if (r.w <= 0 || r.h <= 0) continue;
+      const inside = pts.filter(q => q[0] > r.x && q[0] < r.x + r.w && q[1] > r.y && q[1] < r.y + r.h).length;
+      if (inside >= 3) warns.add(`an arrow runs through ${l.str.startsWith('icon:') ? 'an icon' : `the label "${l.str}"`}: start it from the side that faces its target`);
+    }
+    if (tall) {
+      const zone = b => b.x < 50 * k - tol || b.x + b.w > W - 50 * k + tol || b.y < 150 * k - tol || b.y + b.h > H - 270 * k + tol;
+      for (const l of labels) if (zone(l)) warns.add(`${l.str.startsWith('icon:') ? 'an icon' : `"${l.str}"`} sits where phone UI covers the video: keep ink inside x ${50 * k}..${W - 50 * k}, y ${150 * k}..${H - 270 * k}`);
+      if (boxes.some(zone)) warns.add(`a drawn shape reaches where phone UI covers the video: keep ink inside x ${50 * k}..${W - 50 * k}, y ${150 * k}..${H - 270 * k}`);
+    }
+  };
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  labels = []; arrowsList = []; boxes = [];
+  S.beats.forEach((b, i) => {
+    if (b.clear || b.bg) { check(); labels = []; arrowsList = []; boxes = []; }
+    if (!b.draw) return;
+    const before = inkN;
+    b.draw(1);
+    if (inkN === before && !b.clear && !b.bg) warns.add(`beat ${i + 1} draws nothing${b.say ? `: "${b.say}"` : ''}: a beat that only talks leaves a still picture, add a stroke or a label`);
+  });
+  check();
+};
 let CAPTIONS = false;
 window.setCaptions = on => { CAPTIONS = !!on; };
 // Burned-in caption: the sentence being spoken, wrapped, on a dark pill at the foot of the board.
@@ -239,7 +272,7 @@ function caption(text) {
   g.restore(); g.direction = 'ltr'; g.textAlign = 'left';
 }
 function draw(t) {
-  pen = null; labels = [];
+  pen = null; labels = []; arrowsList = []; boxes = [];
   let from = 0, theme = BASE;   // a beat with clear or bg wipes the ink, so start from the latest one already reached
   const bgs = [];
   S.beats.forEach((b, i) => { if (t < T[i].start) return; if (b.clear || b.bg) from = i; if (b.clear) bgs.length = 0; if (b.bg) bgs.push(i); if (b.theme) theme = b.theme; });   // clear takes the screenshot away too

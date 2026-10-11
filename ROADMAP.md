@@ -30,7 +30,7 @@ Where penstroke is going. Ordered by how much each item improves the videos peop
 
 ## 5. Trust
 
-- [ ] **Output checks in tests.** Verify nothing overlaps or runs off the board, not just that renders finish.
+- [x] **Output checks** (`WARN` for empty beats, arrows through labels or icons, tiny text and the phone-UI zone; `tests/lint/` proves each fires).
 - [x] **Example gallery in the README** (`docs/gallery/`, made with `scripts/gif.js`).
 - [ ] **Speed and caching** for long videos.
 
