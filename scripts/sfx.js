@@ -1,6 +1,6 @@
-// Synthesised sound for penstroke: a pen scratch that follows the drawing, a swipe when the board is wiped, and a soft
-// chord pad for music. Everything is generated here from noise and sine waves, so there is nothing to license and no
-// API to call. Mono, 48 kHz, written as a 16-bit WAV that render.js mixes in.
+// Synthesised sound for penstroke: a pen scratch that follows the drawing and a swipe when the board is wiped.
+// Generated from noise, so there is nothing to license and no API to call. There is no generated music: music is
+// always a file the user passes. Mono, 48 kHz, written as a 16-bit WAV that render.js mixes in.
 const fs = require('fs');
 
 const SR = 48000;
@@ -68,27 +68,6 @@ function swipes(times, total) {
   return out;
 }
 
-// Soft pad: slow chords, each note two sines a few cents apart (a chorus, so it is not a bare synth tone), low register,
-// slow crossfades, no vibrato. It is meant to sit far under a voice; for anything better, bring your own track.
-const CHORDS = [[130.81, 164.81, 196.0, 246.94], [110.0, 130.81, 164.81, 196.0], [87.31, 130.81, 174.61, 220.0], [98.0, 146.83, 196.0, 246.94]];
-function pad(total) {
-  const out = new Float32Array(Math.ceil(total * SR)), span = 8, fade = 3;
-  const chords = Math.ceil(total / span) + 1;
-  for (let c = 0; c < chords; c++) {
-    const notes = CHORDS[c % CHORDS.length], start = c * span - fade / 2;
-    const i0 = Math.max(0, Math.floor(start * SR)), i1 = Math.min(out.length, Math.ceil((start + span + fade) * SR));
-    for (let i = i0; i < i1; i++) {
-      const t = i / SR, u = t - start;
-      const env = Math.min(1, u / fade, (span + fade - u) / fade);
-      const e = env * env * (3 - 2 * env);   // smoothstep
-      let s = 0;
-      for (const f of notes) s += Math.sin(2 * Math.PI * f * 0.9965 * t) + Math.sin(2 * Math.PI * f * 1.0035 * t);
-      out[i] += s / (notes.length * 2) * e;
-    }
-  }
-  return out;
-}
-
 // Scale a track so its audible part sits at a known level (RMS, 1.0 = full scale). Levels are then predictable
 // next to speech, whatever the synthesis does: -40 dB is a bed you only notice when it stops.
 function level(track, rms) {
@@ -102,4 +81,4 @@ function level(track, rms) {
 
 const mixTracks = (a, b) => { const o = new Float32Array(Math.max(a.length, b.length)); a.forEach((v, i) => { o[i] += v; }); b.forEach((v, i) => { o[i] += v; }); return o; };
 
-module.exports = { SR, writeWav, runs, scratch, swipes, pad, level, mixTracks };
+module.exports = { SR, writeWav, runs, scratch, swipes, level, mixTracks };

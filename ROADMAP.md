@@ -20,7 +20,7 @@ Where penstroke is going. Ordered by how much each item improves the videos peop
 - [x] **Fast preview** (`--sheet` about 1s, `--preview` small and 12 fps).
 - [x] **Re-render some beats** (`--beats 4-6`).
 - [x] **Captions** (`.srt` every render, `KHAN_CAPTIONS=burn` to draw them in). Burned-in captions and exported `.srt` files for sound-off viewing.
-- [x] **Music and sound effects** (`--sfx`, `--music`; pen scratch follows the drawing, music ducks under the voice).
+- [x] **Music and sound effects.** Music is only a file you pass (`--music path`, looped and ducked under the voice); `--sfx` adds an optional pen scratch. No generated music.
 
 ## 4. Reach
 

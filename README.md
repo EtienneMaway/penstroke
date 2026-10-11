@@ -103,12 +103,14 @@ Then render the full video once the sheet is clean.
 
 ## Sound
 
+Nothing is added unless you ask. Music is only ever a file you pass:
+
 ```sh
-node scripts/render.js scene.js out.mp4 --sfx           # pen scratch while it draws, swipe when the board clears
-node scripts/render.js scene.js out.mp4 --music         # a soft pad under the voice
+node scripts/render.js scene.js out.mp4 --music ~/Music/bed.mp3   # looped, faded, ducked under the voice
+node scripts/render.js scene.js out.mp4 --sfx                     # optional: a soft pen scratch and a swipe on wipes
 ```
 
-Or `sfx: true` and `music: true` on a scene. `music: 'bed.mp3'` uses your own track, looped and ducked under the voice. All the built-in sound is synthesised locally, so there is nothing to license.
+Or `music: 'bed.mp3'` and `sfx: true` on a scene. Penstroke generates no music, and `music: { src, volume }` sets the level (default 0.12 of the file's own). Use a track you have the right to use.
 
 ## Export for where it will be posted
 
@@ -156,7 +158,7 @@ penstroke is a fork of [**khan-explainer**](https://github.com/haiderfarooq3/kha
 - A library of 24 hand-drawn icons (`icon()`)
 - Fast iteration: `--sheet`, `--preview` and `--beats`
 - Export presets for TikTok, Reels, Shorts, Instagram, LinkedIn and YouTube
-- Sound: a pen scratch that follows the drawing, a swipe on wipes, and a quiet music bed that ducks under the voice
+- Sound: your own music file, looped and ducked under the voice, and an optional soft pen scratch that follows the drawing
 - A vertical-native example, an I/O systems lesson, a README gallery and `scripts/gif.js`
 - See [ROADMAP.md](ROADMAP.md) for what is next
 

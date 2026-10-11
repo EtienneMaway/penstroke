@@ -107,21 +107,20 @@ See `examples/arabic.js` (an Arabic lesson) and `examples/languages.js` (one wor
 
 `node tests/run.js` renders every example and the same short scene in fifteen languages (`tests/languages/`), and fails on any warning. `node tests/fonts.js` prints which face each script gets on this machine: a Mac face, a Noto face, or none.
 
-## Sound: pen scratch, music, swipes
+## Sound: music file, pen scratch
 
-Off by default, because a lesson often goes under someone else's music. Switch on per scene or per render:
+Both off by default. A lesson often goes under someone else's music, and nothing is added unless you ask.
 
 ```js
-scene({ sfx: true, music: true, beats: [...] })
-scene({ sfx: { volume: 0.5 }, music: { src: 'bed.mp3', volume: 0.2 }, beats: [...] })
+scene({ music: 'bed.mp3', beats: [...] })                 // your own track, relative to the scene file
+scene({ music: { src: 'bed.mp3', volume: 0.2 }, sfx: true, beats: [...] })
 ```
 
-or `node render.js scene.js out.mp4 --sfx --music` for any scene without editing it.
+or `node render.js scene.js out.mp4 --music ~/Music/bed.mp3 --sfx` for any scene without editing it.
 
-- **`sfx`**: a pen scratch that runs exactly while the pen is mid-stroke, and a short swipe where the board is wiped (`clear` or a new `bg`). Synthesised, nothing to license.
-- **`music: true`**: a soft four-chord pad, synthesised and quiet. **`music: 'file.mp3'`**: your own track, relative to the scene file, looped, faded in and out, and ducked under the voice so speech stays clear. Use music you have the right to use.
-- Default levels are deliberately low and absolute: the scratch sits about 15 dB under speech and the synthesised pad about 18 dB under it, then ducks further while someone talks. `volume` multiplies that: `1.5` is about 3.5 dB louder, `2` about 6 dB, `0.5` quieter. A file given as `music: 'bed.mp3'` defaults to `volume: 0.12` of its own level. Real-audio clips take both too, but keep `music` low there.
-- Works with `--preset` and `--beats`. The sound is not in the `--sheet` output.
+- **`music`**: only ever a file you pass. Penstroke generates no music. The track is looped, faded in and out, and ducked under the voice so speech stays clear. `music: true` is refused. Use music you have the right to use. A bare path defaults to `volume: 0.12` of the file's own level; raise it if it is too quiet. Real-audio clips take it too, but keep it low there.
+- **`sfx`**: optional, synthesised, nothing to license: a soft pen scratch while the pen is mid-stroke, and a short swipe where the board is wiped (`clear` or a new `bg`). It sits about 15 dB under speech. `sfx: { volume: 0.5 }` makes it quieter, `2` about 6 dB louder.
+- Both work with `--preset` and `--beats`. Neither is in the `--sheet` output.
 
 ## Export presets
 

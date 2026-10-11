@@ -12,7 +12,8 @@ const die = m => { console.error(m); process.exit(1); };
 const argv = process.argv.slice(2), pos = [], opt = {};
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
-  if (a === '--preview' || a === '--sheet' || a === '--no-captions' || a === '--music' || a === '--sfx') opt[a.slice(2)] = true;
+  if (a === '--preview' || a === '--sheet' || a === '--no-captions' || a === '--sfx') opt[a.slice(2)] = true;
+  else if (a === '--music') opt.music = argv[++i];
   else if (a === '--preset') opt.preset = argv[++i];
   else if (a === '--beats' || a === '--beat') opt.beats = argv[++i];
   else if (a.startsWith('--')) die(`unknown flag ${a}`);
@@ -216,12 +217,15 @@ function kokoroTakes(meta, dir) {
   const t1 = ranged ? Math.min(total, timings[last].start + timings[last].dur + 0.5) : total;
   const span = t1 - t0;
 
-  // Sound that is not speech: a pen scratch that follows the drawing, a swipe when the board is wiped, and a quiet music bed.
-  // Scene: `sfx: true`, `music: true` (a soft synthesised pad) or `music: 'bed.mp3'` (your own file, looped and ducked under
-  // the voice), each also `{ ..., volume }`. Flags --sfx and --music turn them on for any scene.
+  // Sound that is not speech. Pen scratch and wipe swipes are synthesised and opt-in: `sfx: true`, or --sfx.
+  // Music is only ever a file you pass: `music: 'bed.mp3'` on the scene (relative to the scene file), `{ src, volume }`,
+  // or --music <path>. It is looped, faded in and out, and ducked under the voice. Nothing is generated for music.
   const extras = [];   // { file, kind, volume, loop }
   const sfxOpt = meta.sfx === false ? null : (meta.sfx || opt.sfx) ? (typeof meta.sfx === 'object' ? meta.sfx : {}) : null;
-  const musicOpt = meta.music === false ? null : (meta.music || opt.music) ? (typeof meta.music === 'object' ? meta.music : typeof meta.music === 'string' ? { src: meta.music } : {}) : null;
+  if (meta.music === true) die("music needs a file path: music: 'bed.mp3' on the scene, or --music <path>. Nothing is generated.");
+  const musicOpt = meta.music === false ? null : opt.music ? { ...(typeof meta.music === 'object' ? meta.music : {}), src: opt.music, cli: true }
+    : typeof meta.music === 'string' ? { src: meta.music } : (meta.music && typeof meta.music === 'object') ? meta.music : null;
+  if (musicOpt && !musicOpt.src) die("music needs a file path: music: { src: 'bed.mp3' }. Nothing is generated.");
   if (!opt.sheet && (sfxOpt || musicOpt)) {
     const fx = require('./sfx');
     if (sfxOpt) {
@@ -234,10 +238,9 @@ function kokoroTakes(meta, dir) {
       extras.push({ file: f, kind: 'sfx', volume: sfxOpt.volume ?? 1 });
     }
     if (musicOpt) {
-      let f = musicOpt.src ? path.resolve(dir, musicOpt.src) : null;
-      if (f && !fs.existsSync(f)) die(`music file not found: ${musicOpt.src} (paths are relative to the scene file)`);
-      if (!f) { f = path.join(tmp, 'music.wav'); fx.writeWav(f, fx.level(fx.pad(total), 0.012)); }   // about -38 dB: a bed you notice mostly when it stops
-      extras.push({ file: f, kind: 'music', volume: musicOpt.volume ?? (musicOpt.src ? 0.12 : 1), loop: !!musicOpt.src });
+      const f = musicOpt.cli ? path.resolve(musicOpt.src) : path.resolve(dir, musicOpt.src);   // --music is relative to where you run it
+      if (!fs.existsSync(f)) die(`music file not found: ${f}`);
+      extras.push({ file: f, kind: 'music', volume: musicOpt.volume ?? 0.12, loop: true });
     }
   }
 

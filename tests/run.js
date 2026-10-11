@@ -31,15 +31,18 @@ for (const [preset, w, h] of [['tiktok', 540, 960], ['square', 540, 540], ['yout
   if (!ok) bad++;
   console.log(`${ok ? 'ok  ' : 'FAIL'} preset ${preset.padEnd(8)} ${size || 'no video'}`);
 }
-// Sound extras: pen scratch + music must mix in without breaking the render, and the audio must be audible.
+// Sound extras: the pen scratch and a user-supplied music file must mix in without breaking the render. There is no
+// generated music, so the test makes a tone to stand in for the file.
 {
-  const f = path.join(out, 'sound.mp4');
-  const r = spawnSync('node', [path.join(root, 'scripts/render.js'), path.join(root, 'examples/ai-agents.js'), f, '--sfx', '--music', '--preview'], { encoding: 'utf8' });
+  const f = path.join(out, 'sound.mp4'), bed = path.join(out, 'bed.wav');
+  execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'sine=frequency=220:duration=3', bed]);
+  const r = spawnSync('node', [path.join(root, 'scripts/render.js'), path.join(root, 'examples/ai-agents.js'), f, '--sfx', '--music', bed, '--preview'], { encoding: 'utf8' });
   let audio = '';
   try { audio = execFileSync('ffprobe', ['-v', 'error', '-select_streams', 'a', '-show_entries', 'stream=codec_type', '-of', 'csv=p=0', f], { encoding: 'utf8' }).trim(); } catch {}
-  const ok = r.status === 0 && audio.startsWith('audio');
+  const refused = spawnSync('node', [path.join(root, 'scripts/render.js'), path.join(root, 'examples/ai-agents.js'), f, '--music', path.join(out, 'missing.mp3'), '--preview'], { encoding: 'utf8' });
+  const ok = r.status === 0 && audio.startsWith('audio') && refused.status !== 0;
   if (!ok) bad++;
-  console.log(`${ok ? 'ok  ' : 'FAIL'} sound  sfx + music`);
+  console.log(`${ok ? 'ok  ' : 'FAIL'} sound  sfx + music file, missing file refused`);
 }
 console.log(bad ? `${bad} failed` : 'all passed');
 process.exit(bad ? 1 : 0);
